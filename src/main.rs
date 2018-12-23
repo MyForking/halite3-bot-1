@@ -257,7 +257,7 @@ impl ShipAI {
             .ship_ids[0];
         match self {
             ShipAI::Collect | ShipAI::Seek if ship.is_full() => *self = ShipAI::Return,
-            ShipAI::Return if ship.halite == 0 && ship.id == first_ship => *self = ShipAI::Seek,
+            //ShipAI::Return if ship.halite == 0 && ship.id == first_ship => *self = ShipAI::Seek,
             ShipAI::Return if ship.halite == 0 => *self = ShipAI::Collect,
             _ => {}
         }
