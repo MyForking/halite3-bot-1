@@ -90,10 +90,9 @@ impl ShipGreedy {
 
         // hope this prevents cycling between two empty tiles
         if mov.is_none() && current_value == 0 {
-            let all = Direction::get_all_cardinals();
-            let d = *rand::thread_rng().choose(&all).unwrap();
-            let p = ship.position.directional_offset(d);
-            if navi.is_safe(&p) {
+            let all: Vec<_> = Direction::get_all_cardinals().into_iter().filter(|&d| navi.is_safe(&ship.position.directional_offset(d))).collect();
+            if let Some(&d) = rand::thread_rng().choose(&all) {
+                let p = ship.position.directional_offset(d);
                 navi.mark_unsafe(&p, ship.id);
                 return d;
             }
@@ -179,7 +178,7 @@ impl ShipReturnDijkstra {
             if visited.contains(&pos){ continue }
             visited.insert(pos);
 
-            let movement_cost = game.map.at_entity(ship).halite / game.constants.move_cost_ratio;
+            let movement_cost = game.map.at_position(&pos).halite / game.constants.move_cost_ratio;
 
             for d in Direction::get_all_cardinals() {
                 let p = pos.directional_offset(d);
@@ -345,7 +344,7 @@ fn main() {
 
             ship_ai.consider_state(&game, ship);
 
-            //Log::log(&format!("ship {:?} AI state: {:?}", ship_id, ship_ai));
+            Log::log(&format!("ship {:?} AI state: {:?}", ship_id, ship_ai));
 
             command_queue.push(ship.move_ship(ship_ai.get_move(&game, &mut navi, ship)));
             //Log::log(".");
