@@ -11,7 +11,7 @@ use hlt::ship::Ship;
 use rand::Rng;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
-use std::collections::{HashMap, HashSet, BinaryHeap};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::env;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -90,7 +90,10 @@ impl ShipGreedy {
 
         // hope this prevents cycling between two empty tiles
         if mov.is_none() && current_value == 0 {
-            let all: Vec<_> = Direction::get_all_cardinals().into_iter().filter(|&d| navi.is_safe(&ship.position.directional_offset(d))).collect();
+            let all: Vec<_> = Direction::get_all_cardinals()
+                .into_iter()
+                .filter(|&d| navi.is_safe(&ship.position.directional_offset(d)))
+                .collect();
             if let Some(&d) = rand::thread_rng().choose(&all) {
                 let p = ship.position.directional_offset(d);
                 navi.mark_unsafe(&p, ship.id);
@@ -148,7 +151,7 @@ struct ShipReturnDijkstra;
 
 impl ShipReturnDijkstra {
     fn get_move(game: &Game, navi: &mut Navi, ship: &Ship) -> Direction {
-        const STEP_COST: i64 = 1;  // fixed cost of one step - tweak to prefer shorter paths
+        const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
 
         let dest = game.players[game.my_id.0].shipyard.position;
 
@@ -157,36 +160,48 @@ impl ShipReturnDijkstra {
         let mut queue = BinaryHeap::new();
         queue.push(DijkstraNode::new(0, (ship.position, vec![])));
 
-        let maxlen = ((ship.position.x - dest.x).abs() + (ship.position.y - dest.y).abs()).max(5) * 2; // todo: tweak me
+        let maxlen =
+            ((ship.position.x - dest.x).abs() + (ship.position.y - dest.y).abs()).max(5) * 2; // todo: tweak me
 
         while let Some(node) = queue.pop() {
             let (pos, path) = node.data;
 
-            if path.len() > maxlen as usize {continue}
+            if path.len() > maxlen as usize {
+                continue;
+            }
 
             if pos == dest {
                 let d = path[0];
                 let p = ship.position.directional_offset(d);
                 if !navi.is_safe(&p) {
-                    return Direction::Still
+                    return Direction::Still;
                 } else {
                     navi.mark_unsafe(&p, ship.id);
-                    return d
+                    return d;
                 }
             }
 
-            if visited.contains(&pos){ continue }
+            if visited.contains(&pos) {
+                continue;
+            }
             visited.insert(pos);
 
             let movement_cost = game.map.at_position(&pos).halite / game.constants.move_cost_ratio;
 
             for d in Direction::get_all_cardinals() {
                 let p = pos.directional_offset(d);
-                if !navi.is_safe(&p) && p != dest {continue}
-                if p.x == dest.x + 1 && p.y == dest.y {continue}  // keep one path open
+                if !navi.is_safe(&p) && p != dest {
+                    continue;
+                }
+                if p.x == dest.x + 1 && p.y == dest.y {
+                    continue;
+                } // keep one path open
                 let mut newpath = path.clone();
                 newpath.push(d);
-                queue.push(DijkstraNode::new(node.cost as i64 - movement_cost as i64 - STEP_COST, (p, newpath)));
+                queue.push(DijkstraNode::new(
+                    node.cost as i64 - movement_cost as i64 - STEP_COST,
+                    (p, newpath),
+                ));
             }
         }
         Direction::Still
@@ -213,9 +228,7 @@ impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraNode<C, T> {
 
 impl<C: Ord, T: Eq> DijkstraNode<C, T> {
     fn new(cost: C, data: T) -> Self {
-        DijkstraNode {
-            cost, data
-        }
+        DijkstraNode { cost, data }
     }
 }
 
@@ -333,9 +346,24 @@ fn main() {
 
         ai.retain(|ship_id, _| me.ship_ids.contains(ship_id));
 
-        Log::log(&format!("# Collect: {}", ai.values().filter(|&&ship_ai| ship_ai == ShipAI::Collect).count()));
-        Log::log(&format!("# Seek: {}", ai.values().filter(|&&ship_ai| ship_ai == ShipAI::Seek).count()));
-        Log::log(&format!("# Return: {}", ai.values().filter(|&&ship_ai| ship_ai == ShipAI::Return).count()));
+        Log::log(&format!(
+            "# Collect: {}",
+            ai.values()
+                .filter(|&&ship_ai| ship_ai == ShipAI::Collect)
+                .count()
+        ));
+        Log::log(&format!(
+            "# Seek: {}",
+            ai.values()
+                .filter(|&&ship_ai| ship_ai == ShipAI::Seek)
+                .count()
+        ));
+        Log::log(&format!(
+            "# Return: {}",
+            ai.values()
+                .filter(|&&ship_ai| ship_ai == ShipAI::Return)
+                .count()
+        ));
 
         for ship_id in &me.ship_ids {
             let ship_ai = ai.entry(*ship_id).or_insert(ShipAI::Collect);
