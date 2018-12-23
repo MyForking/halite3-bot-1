@@ -11,7 +11,7 @@ use hlt::ship::Ship;
 use rand::Rng;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, BinaryHeap};
 use std::env;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -145,6 +145,82 @@ impl ShipReturnNaive {
     }
 }
 
+struct ShipReturnDijkstra;
+
+impl ShipReturnDijkstra {
+    fn get_move(game: &Game, navi: &mut Navi, ship: &Ship) -> Direction {
+        const STEP_COST: i64 = 1;  // fixed cost of one step - tweak to prefer shorter paths
+
+        let dest = game.players[game.my_id.0].shipyard.position;
+
+        let mut visited = HashSet::new();
+
+        let mut queue = BinaryHeap::new();
+        queue.push(DijkstraNode::new(0, (ship.position, vec![])));
+
+        let maxlen = ((ship.position.x - dest.x).abs() + (ship.position.y - dest.y).abs()).max(5) * 2; // todo: tweak me
+
+        while let Some(node) = queue.pop() {
+            let (pos, path) = node.data;
+
+            if path.len() > maxlen as usize {continue}
+
+            if pos == dest {
+                let d = path[0];
+                let p = ship.position.directional_offset(d);
+                if !navi.is_safe(&p) {
+                    return Direction::Still
+                } else {
+                    navi.mark_unsafe(&p, ship.id);
+                    return d
+                }
+            }
+
+            if visited.contains(&pos){ continue }
+            visited.insert(pos);
+
+            let movement_cost = game.map.at_entity(ship).halite / game.constants.move_cost_ratio;
+
+            for d in Direction::get_all_cardinals() {
+                let p = pos.directional_offset(d);
+                if !navi.is_safe(&p) && p != dest {continue}
+                if p.x == dest.x + 1 && p.y == dest.y {continue}  // keep one path open
+                let mut newpath = path.clone();
+                newpath.push(d);
+                queue.push(DijkstraNode::new(node.cost as i64 - movement_cost as i64 - STEP_COST, (p, newpath)));
+            }
+        }
+        Direction::Still
+    }
+}
+
+#[derive(Eq, PartialEq)]
+struct DijkstraNode<C: Ord, T: Eq> {
+    cost: C,
+    data: T,
+}
+
+impl<C: Ord, T: Eq> std::cmp::PartialOrd for DijkstraNode<C, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.cost.partial_cmp(&other.cost)
+    }
+}
+
+impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraNode<C, T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.cost.cmp(&other.cost)
+    }
+}
+
+impl<C: Ord, T: Eq> DijkstraNode<C, T> {
+    fn new(cost: C, data: T) -> Self {
+        DijkstraNode {
+            cost, data
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ShipAI {
     Collect,
     Seek,
@@ -156,7 +232,7 @@ impl ShipAI {
         match self {
             ShipAI::Collect => ShipGreedy::get_move(game, navi, ship),
             ShipAI::Seek => ShipSeeker::get_move(game, navi, ship),
-            ShipAI::Return => ShipReturnNaive::get_move(game, navi, ship),
+            ShipAI::Return => ShipReturnDijkstra::get_move(game, navi, ship),
         }
     }
 
@@ -256,6 +332,12 @@ fn main() {
 
         let mut command_queue: Vec<Command> = Vec::new();
 
+        ai.retain(|ship_id, _| me.ship_ids.contains(ship_id));
+
+        Log::log(&format!("# Collect: {}", ai.values().filter(|&&ship_ai| ship_ai == ShipAI::Collect).count()));
+        Log::log(&format!("# Seek: {}", ai.values().filter(|&&ship_ai| ship_ai == ShipAI::Seek).count()));
+        Log::log(&format!("# Return: {}", ai.values().filter(|&&ship_ai| ship_ai == ShipAI::Return).count()));
+
         for ship_id in &me.ship_ids {
             let ship_ai = ai.entry(*ship_id).or_insert(ShipAI::Collect);
 
@@ -263,7 +345,10 @@ fn main() {
 
             ship_ai.consider_state(&game, ship);
 
+            //Log::log(&format!("ship {:?} AI state: {:?}", ship_id, ship_ai));
+
             command_queue.push(ship.move_ship(ship_ai.get_move(&game, &mut navi, ship)));
+            //Log::log(".");
         }
 
         if me.halite > last_halite {
@@ -300,7 +385,7 @@ fn main() {
 
         last_halite = me.halite;
 
-        Log::log(&format!("issuing commands: {:?}", command_queue));
+        //Log::log(&format!("issuing commands: {:?}", command_queue));
 
         Game::end_turn(&command_queue);
 
