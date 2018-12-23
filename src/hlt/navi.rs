@@ -1,8 +1,8 @@
 use hlt::direction::Direction;
+use hlt::game::Game;
 use hlt::position::Position;
 use hlt::ship::Ship;
 use hlt::ShipId;
-use hlt::game::Game;
 
 pub struct Navi {
     pub width: usize,
@@ -17,7 +17,11 @@ impl Navi {
             occupied.push(vec![None; width]);
         }
 
-        Navi { width, height, occupied }
+        Navi {
+            width,
+            height,
+            occupied,
+        }
     }
 
     pub fn update_frame(&mut self, game: &Game) {
@@ -70,15 +74,31 @@ impl Navi {
         let mut possible_moves: Vec<Direction> = Vec::new();
 
         if normalized_source.x < normalized_destination.x {
-            possible_moves.push(if dx > wrapped_dx { Direction::West } else { Direction::East });
+            possible_moves.push(if dx > wrapped_dx {
+                Direction::West
+            } else {
+                Direction::East
+            });
         } else if normalized_source.x > normalized_destination.x {
-            possible_moves.push(if dx < wrapped_dx { Direction::West } else { Direction::East });
+            possible_moves.push(if dx < wrapped_dx {
+                Direction::West
+            } else {
+                Direction::East
+            });
         }
 
         if normalized_source.y < normalized_destination.y {
-            possible_moves.push(if dy > wrapped_dy { Direction::North } else { Direction::South });
+            possible_moves.push(if dy > wrapped_dy {
+                Direction::North
+            } else {
+                Direction::South
+            });
         } else if normalized_source.y > normalized_destination.y {
-            possible_moves.push(if dy < wrapped_dy { Direction::North } else { Direction::South });
+            possible_moves.push(if dy < wrapped_dy {
+                Direction::North
+            } else {
+                Direction::South
+            });
         }
 
         possible_moves

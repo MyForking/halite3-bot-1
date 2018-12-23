@@ -18,8 +18,23 @@ impl Direction {
         }
     }
 
+    pub fn turn_right(&self) -> Direction {
+        match self {
+            Direction::North => Direction::East,
+            Direction::East => Direction::South,
+            Direction::South => Direction::West,
+            Direction::West => Direction::North,
+            Direction::Still => Direction::Still,
+        }
+    }
+
     pub fn get_all_cardinals() -> Vec<Direction> {
-        vec![Direction::North, Direction::South, Direction::East, Direction::West]
+        vec![
+            Direction::North,
+            Direction::South,
+            Direction::East,
+            Direction::West,
+        ]
     }
 
     pub fn get_char_encoding(&self) -> char {

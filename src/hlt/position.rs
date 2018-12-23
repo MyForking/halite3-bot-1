@@ -16,13 +16,18 @@ impl Position {
             Direction::Still => (0, 0),
         };
 
-        Position { x: self.x + dx, y: self.y + dy }
+        Position {
+            x: self.x + dx,
+            y: self.y + dy,
+        }
     }
 
     pub fn get_surrounding_cardinals(&self) -> Vec<Position> {
-        vec! {
-            self.directional_offset(Direction::North), self.directional_offset(Direction::South),
-            self.directional_offset(Direction::East), self.directional_offset(Direction::West)
-        }
+        vec![
+            self.directional_offset(Direction::North),
+            self.directional_offset(Direction::South),
+            self.directional_offset(Direction::East),
+            self.directional_offset(Direction::West),
+        ]
     }
 }

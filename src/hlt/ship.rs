@@ -2,8 +2,8 @@ use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::entity::Entity;
 use hlt::input::Input;
-use hlt::PlayerId;
 use hlt::position::Position;
+use hlt::PlayerId;
 use hlt::ShipId;
 
 pub struct Ship {
@@ -38,7 +38,13 @@ impl Ship {
         let y = input.next_i32();
         let halite = input.next_usize();
 
-        Ship { owner: player_id, id, position: Position { x, y }, halite, max_halite }
+        Ship {
+            owner: player_id,
+            id,
+            position: Position { x, y },
+            halite,
+            max_halite,
+        }
     }
 }
 
