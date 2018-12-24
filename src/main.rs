@@ -5,9 +5,13 @@ extern crate rand;
 use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
+use hlt::game_map::GameMap;
 use hlt::log::Log;
 use hlt::navi::Navi;
+use hlt::player::Player;
+use hlt::position::Position;
 use hlt::ship::Ship;
+use hlt::ShipId;
 use rand::Rng;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
@@ -17,196 +21,27 @@ use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
 mod hlt;
+mod movement;
 
-/*struct Path {
-    start: Position,
-    steps: Vec<Direction>,
+
+enum ShipTask {
+    Greedy,
+    Seek,
+    ReturnNaive,
+    ReturnDijkstra,
 }
 
-impl Path {
-    fn rect(size: usize, start: Position, first_step: Direction) -> Self {
-        let mut steps = vec![];
-
-        steps.extend(iter::repeat(first_step).take(size));
-
-        let step = first_step.turn_right();
-        steps.extend(iter::repeat(step).take(size));
-
-        let step = step.turn_right();
-        steps.extend(iter::repeat(step).take(size));
-
-        let step = step.turn_right();
-        steps.extend(iter::repeat(step).take(size));
-
-        Path {
-            start, steps
+impl ShipTask {
+    fn get_move(&self, state: &mut GameState, ship_id: ShipId) -> Direction {
+        match self {
+            ShipTask::Greedy => movement::greedy(state, ship_id),
+            ShipTask::Seek => movement::seek(state, ship_id),
+            ShipTask::ReturnNaive => movement::return_naive(state, ship_id),
+            ShipTask::ReturnDijkstra => movement::return_dijkstra(state, ship_id),
         }
-    }
-/*
-    fn evaluate(&self, mut capacity: usize, game: &Game) {
-        let map = game.map.clone();
-        let mut pos = self.start;
-        for &d in &self.steps {
-            if d == Direction::Still {
-                let delta = map.at_position(&pos).halite / game.constants.extract_ratio;
-                map.at_position_mut(&pos) -= delta;
-                capacity = (capacity + delta).min(game.constants.max_halite);
-            } else {
-                pos = pos.directional_offset(d);
-            }
-        }
-    }*/
-}*/
-
-struct ShipGreedy;
-
-impl ShipGreedy {
-    const PREFER_MOVE_FACTOR: usize = 2;
-
-    fn get_move(game: &Game, navi: &mut Navi, ship: &Ship) -> Direction {
-        let movement_cost = game.map.at_entity(ship).halite / game.constants.move_cost_ratio;
-
-        if ship.halite < movement_cost {
-            return Direction::Still;
-        }
-
-        let current_value = game.map.at_entity(ship).halite / game.constants.extract_ratio;
-
-        let mov = Direction::get_all_cardinals()
-            .into_iter()
-            .map(|d| (d, ship.position.directional_offset(d)))
-            .map(|(d, p)| {
-                (
-                    game.map.at_position(&p).halite / game.constants.extract_ratio,
-                    d,
-                    p,
-                )
-            })
-            .filter(|&(value, _, _)| {
-                value > movement_cost + current_value * ShipGreedy::PREFER_MOVE_FACTOR
-            })
-            .filter(|(_, _, p)| navi.is_safe(p))
-            .max_by_key(|&(value, _, _)| value);
-
-        // hope this prevents cycling between two empty tiles
-        if mov.is_none() && current_value == 0 {
-            let all: Vec<_> = Direction::get_all_cardinals()
-                .into_iter()
-                .filter(|&d| navi.is_safe(&ship.position.directional_offset(d)))
-                .collect();
-            if let Some(&d) = rand::thread_rng().choose(&all) {
-                let p = ship.position.directional_offset(d);
-                navi.mark_unsafe(&p, ship.id);
-                return d;
-            }
-        }
-
-        let (d, p) = mov
-            .map(|(_, d, p)| (d, p))
-            .unwrap_or((Direction::Still, ship.position));
-
-        navi.mark_unsafe(&p, ship.id);
-        d
     }
 }
 
-struct ShipSeeker;
-
-impl ShipSeeker {
-    fn get_move(game: &Game, navi: &mut Navi, ship: &Ship) -> Direction {
-        let movement_cost = game.map.at_entity(ship).halite / game.constants.move_cost_ratio;
-
-        if ship.halite < movement_cost {
-            return Direction::Still;
-        }
-
-        let target = game
-            .map
-            .cells
-            .iter()
-            .flat_map(|sub| sub.iter())
-            .max_by_key(|cell| cell.halite)
-            .unwrap();
-
-        let current_value = game.map.at_entity(ship).halite / game.constants.extract_ratio;
-
-        if current_value * 4 >= target.halite * 3 {
-            return Direction::Still;
-        }
-
-        navi.naive_navigate(ship, &target.position)
-    }
-}
-
-struct ShipReturnNaive;
-
-impl ShipReturnNaive {
-    fn get_move(game: &Game, navi: &mut Navi, ship: &Ship) -> Direction {
-        let dest = game.players[game.my_id.0].shipyard.position;
-        navi.naive_navigate(ship, &dest)
-    }
-}
-
-struct ShipReturnDijkstra;
-
-impl ShipReturnDijkstra {
-    fn get_move(game: &Game, navi: &mut Navi, ship: &Ship) -> Direction {
-        const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
-
-        let dest = game.players[game.my_id.0].shipyard.position;
-
-        let mut visited = HashSet::new();
-
-        let mut queue = BinaryHeap::new();
-        queue.push(DijkstraNode::new(0, (ship.position, vec![])));
-
-        let maxlen =
-            ((ship.position.x - dest.x).abs() + (ship.position.y - dest.y).abs()).max(5) * 2; // todo: tweak me
-
-        while let Some(node) = queue.pop() {
-            let (pos, path) = node.data;
-
-            if path.len() > maxlen as usize {
-                continue;
-            }
-
-            if pos == dest {
-                let d = path[0];
-                let p = ship.position.directional_offset(d);
-                if !navi.is_safe(&p) {
-                    return Direction::Still;
-                } else {
-                    navi.mark_unsafe(&p, ship.id);
-                    return d;
-                }
-            }
-
-            if visited.contains(&pos) {
-                continue;
-            }
-            visited.insert(pos);
-
-            let movement_cost = game.map.at_position(&pos).halite / game.constants.move_cost_ratio;
-
-            for d in Direction::get_all_cardinals() {
-                let p = pos.directional_offset(d);
-                if !navi.is_safe(&p) && p != dest {
-                    continue;
-                }
-                if p.x == dest.x + 1 && p.y == dest.y {
-                    continue;
-                } // keep one path open
-                let mut newpath = path.clone();
-                newpath.push(d);
-                queue.push(DijkstraNode::new(
-                    node.cost as i64 - movement_cost as i64 - STEP_COST,
-                    (p, newpath),
-                ));
-            }
-        }
-        Direction::Still
-    }
-}
 
 #[derive(Eq, PartialEq)]
 struct DijkstraNode<C: Ord, T: Eq> {
@@ -232,35 +67,216 @@ impl<C: Ord, T: Eq> DijkstraNode<C, T> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ShipAI {
-    Collect,
-    Seek,
-    Return,
+    Collector(ShipTask),
 }
 
 impl ShipAI {
-    fn get_move(&self, game: &Game, navi: &mut Navi, ship: &Ship) -> Direction {
+    fn new_collector() -> Self {
+        ShipAI::Collector(ShipTask::Greedy)
+    }
+
+    fn think(&mut self, ship_id: ShipId, state: &mut GameState) {
         match self {
-            ShipAI::Collect => ShipGreedy::get_move(game, navi, ship),
-            ShipAI::Seek => ShipSeeker::get_move(game, navi, ship),
-            ShipAI::Return => ShipReturnDijkstra::get_move(game, navi, ship),
+            ShipAI::Collector(ref mut task) => {
+                {
+                    let ship = state.get_ship(ship_id);
+                    match task {
+                        ShipTask::Greedy if ship.is_full() => *task = ShipTask::ReturnDijkstra,
+                        ShipTask::ReturnDijkstra if ship.halite == 0 => *task = ShipTask::Greedy,
+                        _ => {}
+                    }
+                }
+                let d = task.get_move(state, ship_id);
+                state.move_ship(ship_id, d);
+            }
+        }
+    }
+}
+
+
+pub struct GameState {
+    game: Game,
+    navi: Navi,
+    command_queue: Vec<Command>,
+    collect_statistic: Vec<f64>,
+    last_halite: usize,
+}
+
+impl GameState {
+    fn new() -> Self {
+        let game = Game::new();
+        let state = GameState {
+            navi: Navi::new(game.map.width, game.map.height),
+            command_queue: vec![],
+            collect_statistic: Vec::with_capacity(game.constants.max_turns),
+            last_halite: 5000,
+            game,
+        };
+
+        Game::ready("MyRustBot");
+
+        state
+    }
+
+    fn update_frame(&mut self) {
+        self.game.update_frame();
+        self.navi.update_frame(&self.game);
+
+        if self.me().halite > self.last_halite {
+            let diff = (self.me().halite - self.last_halite) as f64 / self.me().ship_ids.len() as f64;
+            self.collect_statistic.push(diff);
+        } else {
+            self.collect_statistic.push(0.0);
+        }
+
+        self.last_halite = self.me().halite;
+
+        self.command_queue.clear();
+
+        let ids = self.me().ship_ids.clone();
+        //self.ship_ais.retain(|ship_id, _| ids.contains(ship_id));
+    }
+
+    fn finalize_frame(&mut self) {
+        //Log::log(&format!("issuing commands: {:?}", command_queue));
+
+        Game::end_turn(&self.command_queue);
+
+        if self.game.turn_number == self.game.constants.max_turns {
+            Log::log(&format!("collection rate: {:?}", self.collect_statistic));
         }
     }
 
-    fn consider_state(&mut self, game: &Game, ship: &Ship) {
-        let first_ship = game
-            .players
-            .iter()
-            .find(|p| p.id == game.my_id)
-            .unwrap()
-            .ship_ids[0];
-        match self {
-            ShipAI::Collect | ShipAI::Seek if ship.is_full() => *self = ShipAI::Return,
-            //ShipAI::Return if ship.halite == 0 && ship.id == first_ship => *self = ShipAI::Seek,
-            ShipAI::Return if ship.halite == 0 => *self = ShipAI::Collect,
-            _ => {}
+    fn me(&self) -> &Player {
+        &self.game.players[self.game.my_id.0]
+    }
+
+    fn my_ships<'a>(&'a self) -> impl Iterator<Item=ShipId> + 'a {
+        self.me().ship_ids.iter().cloned()
+    }
+
+    fn get_ship(&self, id: ShipId) -> &Ship {
+        &self.game.ships[&id]
+    }
+
+    fn move_ship(&mut self, id: ShipId, d: Direction) {
+        let cmd = self.get_ship(id).move_ship(d);
+        self.command_queue.push(cmd);
+    }
+
+    fn get_dijkstra_move(&self, start: Position, dest: Position) -> Direction {
+        const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
+
+        let mut visited = HashSet::new();
+
+        let mut queue = BinaryHeap::new();
+        queue.push(DijkstraNode::new(0, (start, vec![])));
+
+        let maxlen =
+            ((start.x - dest.x).abs() + (start.y - dest.y).abs()).max(5) * 2; // todo: tweak me
+
+        while let Some(node) = queue.pop() {
+            let (pos, path) = node.data;
+
+            if path.len() > maxlen as usize {
+                continue;
+            }
+
+            if pos == dest {
+                return path[0];
+            }
+
+            if visited.contains(&pos) {
+                continue;
+            }
+            visited.insert(pos);
+
+            let movement_cost = self.game.map.at_position(&pos).halite / self.game.constants.move_cost_ratio;
+
+            for d in Direction::get_all_cardinals() {
+                let p = pos.directional_offset(d);
+                if !self.navi.is_safe(&p) && p != dest {
+                    continue;
+                }
+                // keep one path open
+                if p.x == dest.x + 1 && p.y == dest.y {
+                    continue;
+                }
+                let mut newpath = path.clone();
+                newpath.push(d);
+                queue.push(DijkstraNode::new(
+                    node.cost as i64 - movement_cost as i64 - STEP_COST,
+                    (p, newpath),
+                ));
+            }
         }
+        Direction::Still
+    }
+}
+
+#[derive(Default)]
+struct Commander {
+    new_ships: HashSet<ShipId>,
+    lost_ships: HashSet<ShipId>,
+    ships: HashSet<ShipId>,
+    ship_ais: HashMap<ShipId, ShipAI>,
+}
+
+impl Commander {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn sync(&mut self, state: &GameState) {
+        let state_ships: HashSet<_> = state.my_ships().collect();
+
+        self.new_ships.extend(&state_ships - &self.ships);
+        self.lost_ships.extend(&self.ships - &state_ships);
+        self.ships = &self.ships & &state_ships;
+    }
+
+    fn process_frame(&mut self, state: &mut GameState) {
+        for id in self.lost_ships.drain() {
+            self.ship_ais.remove(&id);
+        }
+
+        for id in self.new_ships.drain() {
+            self.ships.insert(id);
+            self.ship_ais.insert(id, ShipAI::new_collector());
+        }
+
+        for (id, ai) in &mut self.ship_ais {
+            ai.think(*id, state);
+        }
+
+        let want_ship = if state.game.turn_number > 100 {
+            // average halite collected per ship in the last 100 turns
+            let avg_collected = state.collect_statistic[state.game.turn_number - 100..].iter().sum::<f64>() / 100.0;
+
+            let rounds_to_go = state.game.constants.max_turns - state.game.turn_number;
+
+            let predicted_profit = avg_collected * rounds_to_go as f64;
+
+            predicted_profit as usize > state.game.constants.ship_cost * 2 // safety factor...
+        } else {
+            true
+        };
+
+        let enemy_blocks = state.game
+            .ships
+            .values()
+            .filter(|ship| ship.owner != state.me().id)
+            .any(|ship| ship.position == state.me().shipyard.position);
+
+        if enemy_blocks && state.me().halite >= state.game.constants.ship_cost
+            || (want_ship && state.navi.is_safe(&state.me().shipyard.position))
+            && state.me().halite >= state.game.constants.ship_cost * 2
+            {
+                let cmd = state.me().shipyard.spawn();
+                state.command_queue.push(cmd);
+            }
+
     }
 }
 
@@ -282,142 +298,16 @@ fn main() {
         seed_bytes[12], seed_bytes[13], seed_bytes[14], seed_bytes[15]
     ]);*/
 
-    let mut game = Game::new();
-    let mut navi = Navi::new(game.map.width, game.map.height);
-    let mut ai = HashMap::new();
-
-    let mut collection = Vec::with_capacity(game.constants.max_turns);
-
-    // At this point "game" variable is populated with initial map data.
-    // This is a good place to do computationally expensive start-up pre-processing.
-    // As soon as you call "ready" function below, the 2 second per turn timer will start.
-    Game::ready("MyRustBot");
-
-    Log::log(&format!(
-        "Successfully created bot! My Player ID is {}. Bot rng seed is {}.",
-        game.my_id.0, rng_seed
-    ));
-
-    Log::log("Constants:");
-    Log::log(&format!("ship_cost: {}", game.constants.ship_cost));
-    Log::log(&format!("dropoff_cost: {}", game.constants.dropoff_cost));
-    Log::log(&format!("max_halite: {}", game.constants.max_halite));
-    Log::log(&format!("max_turns: {}", game.constants.max_turns));
-    Log::log(&format!("extract_ratio: {}", game.constants.extract_ratio));
-    Log::log(&format!(
-        "move_cost_ratio: {}",
-        game.constants.move_cost_ratio
-    ));
-    Log::log(&format!(
-        "inspiration_enabled: {}",
-        game.constants.inspiration_enabled
-    ));
-    Log::log(&format!(
-        "inspiration_radius: {}",
-        game.constants.inspiration_radius
-    ));
-    Log::log(&format!(
-        "inspiration_ship_count: {}",
-        game.constants.inspiration_ship_count
-    ));
-    Log::log(&format!(
-        "inspired_extract_ratio: {}",
-        game.constants.inspired_extract_ratio
-    ));
-    Log::log(&format!(
-        "inspired_bonus_multiplier: {}",
-        game.constants.inspired_bonus_multiplier
-    ));
-    Log::log(&format!(
-        "inspired_move_cost_ratio: {}",
-        game.constants.inspired_move_cost_ratio
-    ));
-
-    let mut last_halite = 5000;
+    let mut commander = Commander::new();
+    let mut game = GameState::new();
 
     loop {
         game.update_frame();
-        navi.update_frame(&game);
 
-        let me = &game.players[game.my_id.0];
-        //let map = &game.map;
+        commander.sync(&game);
 
-        let mut command_queue: Vec<Command> = Vec::new();
+        commander.process_frame(&mut game);
 
-        ai.retain(|ship_id, _| me.ship_ids.contains(ship_id));
-
-        Log::log(&format!(
-            "# Collect: {}",
-            ai.values()
-                .filter(|&&ship_ai| ship_ai == ShipAI::Collect)
-                .count()
-        ));
-        Log::log(&format!(
-            "# Seek: {}",
-            ai.values()
-                .filter(|&&ship_ai| ship_ai == ShipAI::Seek)
-                .count()
-        ));
-        Log::log(&format!(
-            "# Return: {}",
-            ai.values()
-                .filter(|&&ship_ai| ship_ai == ShipAI::Return)
-                .count()
-        ));
-
-        for ship_id in &me.ship_ids {
-            let ship_ai = ai.entry(*ship_id).or_insert(ShipAI::Collect);
-
-            let ship = &game.ships[ship_id];
-
-            ship_ai.consider_state(&game, ship);
-
-            Log::log(&format!("ship {:?} AI state: {:?}", ship_id, ship_ai));
-
-            command_queue.push(ship.move_ship(ship_ai.get_move(&game, &mut navi, ship)));
-            //Log::log(".");
-        }
-
-        if me.halite > last_halite {
-            collection.push((me.halite - last_halite) as f64 / me.ship_ids.len() as f64);
-        } else {
-            collection.push(0.0);
-        }
-
-        let want_ship = if game.turn_number > 100 {
-            // average halite collected per ship in the last 100 turns
-            let avg_collected = collection[game.turn_number - 100..].iter().sum::<f64>() / 100.0;
-
-            let rounds_to_go = game.constants.max_turns - game.turn_number;
-
-            let predicted_profit = avg_collected * rounds_to_go as f64;
-
-            predicted_profit as usize > game.constants.ship_cost * 2 // safety factor...
-        } else {
-            true
-        };
-
-        let enemy_blocks = game
-            .ships
-            .values()
-            .filter(|ship| ship.owner != me.id)
-            .any(|ship| ship.position == me.shipyard.position);
-
-        if enemy_blocks && me.halite >= game.constants.ship_cost
-            || (want_ship && navi.is_safe(&me.shipyard.position))
-                && me.halite >= game.constants.ship_cost * 2
-        {
-            command_queue.push(me.shipyard.spawn());
-        }
-
-        last_halite = me.halite;
-
-        //Log::log(&format!("issuing commands: {:?}", command_queue));
-
-        Game::end_turn(&command_queue);
-
-        if game.turn_number == game.constants.max_turns {
-            Log::log(&format!("collection rate: {:?}", collection));
-        }
+        game.finalize_frame();
     }
 }
