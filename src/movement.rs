@@ -102,7 +102,10 @@ pub fn return_dijkstra(state: &mut GameState, ship_id: ShipId) -> Direction {
 
     let dest = state.me().shipyard.position;
 
-    let d = state.get_dijkstra_move(pos, dest);
+    let path = state.get_dijkstra_path(pos, dest);
+
+    let d = path.first().cloned().unwrap_or(Direction::Still);
+
     let p = pos.directional_offset(d);
     if !state.navi.is_safe(&p) {
         return Direction::Still;
@@ -119,7 +122,8 @@ pub fn kamikaze(state: &mut GameState, ship_id: ShipId) -> Direction {
 
     let dest = state.me().shipyard.position;
 
-    let d = state.get_dijkstra_move(pos, dest);
+    let path = state.get_dijkstra_path(pos, dest);
+    let d = path.first().cloned().unwrap_or(Direction::Still);
     let p = pos.directional_offset(d);
 
     if p == dest && state.game
@@ -127,6 +131,29 @@ pub fn kamikaze(state: &mut GameState, ship_id: ShipId) -> Direction {
         .values()
         .filter(|ship| ship.owner != state.me().id)
         .any(|ship| ship.position == dest) {
+        return d
+    }
+
+    if !state.navi.is_safe(&p)  {
+        return Direction::Still;
+    } else {
+        state.navi.mark_unsafe(&p, ship_id);
+        return d;
+    }
+}
+
+pub fn go_home(state: &mut GameState, ship_id: ShipId) -> Direction {
+    const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
+
+    let pos = state.get_ship(ship_id).position;
+
+    let dest = state.me().shipyard.position;
+
+    let path = state.get_dijkstra_path(pos, dest);
+    let d = path.first().cloned().unwrap_or(Direction::Still);
+    let p = pos.directional_offset(d);
+
+    if p == dest {
         return d
     }
 

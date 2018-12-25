@@ -24,12 +24,14 @@ mod hlt;
 mod movement;
 
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ShipTask {
     Greedy,
     Seek,
     ReturnNaive,
     ReturnDijkstra,
     Kamikaze,
+    GoHome,
 }
 
 impl ShipTask {
@@ -40,6 +42,7 @@ impl ShipTask {
             ShipTask::ReturnNaive => movement::return_naive(state, ship_id),
             ShipTask::ReturnDijkstra => movement::return_dijkstra(state, ship_id),
             ShipTask::Kamikaze => movement::kamikaze(state, ship_id),
+            ShipTask::GoHome => movement::go_home(state, ship_id),
         }
     }
 
@@ -77,9 +80,11 @@ impl<C: Ord, T: Eq> DijkstraNode<C, T> {
     }
 }
 
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ShipAI {
     Collector(ShipTask),
     Kamikaze,
+    GoHome,
 }
 
 impl ShipAI {
@@ -104,6 +109,11 @@ impl ShipAI {
 
             ShipAI::Kamikaze => {
                 let d = ShipTask::Kamikaze.get_move(state, ship_id);
+                state.move_ship(ship_id, d);
+            }
+
+            ShipAI::GoHome => {
+                let d = ShipTask::GoHome.get_move(state, ship_id);
                 state.move_ship(ship_id, d);
             }
         }
@@ -172,6 +182,10 @@ impl GameState {
         }
     }
 
+    fn rounds_left(&self) -> usize {
+       self.game.constants.max_turns - self.game.turn_number
+    }
+
     fn me(&self) -> &Player {
         &self.game.players[self.game.my_id.0]
     }
@@ -189,7 +203,7 @@ impl GameState {
         self.command_queue.push(cmd);
     }
 
-    fn get_dijkstra_move(&self, start: Position, dest: Position) -> Direction {
+    fn get_dijkstra_path(&self, start: Position, dest: Position) -> Vec<Direction> {
         const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
 
         let mut visited = HashSet::new();
@@ -208,7 +222,7 @@ impl GameState {
             }
 
             if pos == dest {
-                return path[0];
+                return path
             }
 
             if visited.contains(&pos) {
@@ -235,7 +249,7 @@ impl GameState {
                 ));
             }
         }
-        Direction::Still
+        vec![]
     }
 }
 
@@ -263,6 +277,9 @@ impl Commander {
     }
 
     fn process_frame(&mut self, state: &mut GameState) {
+
+        let shipyard_pos = state.me().shipyard.position;
+
         for id in self.lost_ships.drain() {
             self.ship_ais.remove(&id);
         }
@@ -273,13 +290,23 @@ impl Commander {
         }
 
         if let Some(id) = self.kamikaze {
-            if state.get_ship(id).position == state.me().shipyard.position {
+            if state.get_ship(id).position == shipyard_pos {
                 *self.ship_ais.get_mut(&id).unwrap() = ShipAI::new_collector();
                 self.kamikaze = None;
             }
         }
 
         for (id, ai) in &mut self.ship_ais {
+            if ai != &ShipAI::GoHome {
+                const GO_HOME_SAFETY_FACTOR: usize = 1;
+
+                let path = state.get_dijkstra_path(state.get_ship(*id).position, shipyard_pos);
+
+                if path.len() >= state.rounds_left() - self.ships.len() * GO_HOME_SAFETY_FACTOR {
+                    *ai = ShipAI::GoHome;
+                }
+            }
+
             ai.think(*id, state);
         }
 
@@ -304,9 +331,7 @@ impl Commander {
             // average halite collected per ship in the last 100 turns
             let avg_collected = state.collect_statistic[state.game.turn_number - 100..].iter().sum::<f64>() / 100.0;
 
-            let rounds_to_go = state.game.constants.max_turns - state.game.turn_number;
-
-            let predicted_profit = avg_collected * rounds_to_go as f64;
+            let predicted_profit = avg_collected * state.rounds_left() as f64;
 
             predicted_profit as usize > state.game.constants.ship_cost * 2 // safety factor...
         } else {
