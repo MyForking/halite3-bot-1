@@ -29,6 +29,7 @@ enum ShipTask {
     Seek,
     ReturnNaive,
     ReturnDijkstra,
+    Kamikaze,
 }
 
 impl ShipTask {
@@ -38,6 +39,15 @@ impl ShipTask {
             ShipTask::Seek => movement::seek(state, ship_id),
             ShipTask::ReturnNaive => movement::return_naive(state, ship_id),
             ShipTask::ReturnDijkstra => movement::return_dijkstra(state, ship_id),
+            ShipTask::Kamikaze => movement::kamikaze(state, ship_id),
+        }
+    }
+
+    fn is_returning(&self) -> bool {
+        match self {
+            ShipTask::ReturnNaive |
+            ShipTask::ReturnDijkstra => true,
+            _ => false,
         }
     }
 }
@@ -69,6 +79,7 @@ impl<C: Ord, T: Eq> DijkstraNode<C, T> {
 
 enum ShipAI {
     Collector(ShipTask),
+    Kamikaze,
 }
 
 impl ShipAI {
@@ -90,6 +101,19 @@ impl ShipAI {
                 let d = task.get_move(state, ship_id);
                 state.move_ship(ship_id, d);
             }
+
+            ShipAI::Kamikaze => {
+                let d = ShipTask::Kamikaze.get_move(state, ship_id);
+                state.move_ship(ship_id, d);
+            }
+        }
+    }
+
+    fn is_returning_collector(&self) -> bool {
+        if let ShipAI::Collector(task) = self {
+            task.is_returning()
+        } else {
+            false
         }
     }
 }
@@ -221,6 +245,8 @@ struct Commander {
     lost_ships: HashSet<ShipId>,
     ships: HashSet<ShipId>,
     ship_ais: HashMap<ShipId, ShipAI>,
+
+    kamikaze: Option<ShipId>,
 }
 
 impl Commander {
@@ -246,8 +272,32 @@ impl Commander {
             self.ship_ais.insert(id, ShipAI::new_collector());
         }
 
+        if let Some(id) = self.kamikaze {
+            if state.get_ship(id).position == state.me().shipyard.position {
+                *self.ship_ais.get_mut(&id).unwrap() = ShipAI::new_collector();
+                self.kamikaze = None;
+            }
+        }
+
         for (id, ai) in &mut self.ship_ais {
             ai.think(*id, state);
+        }
+
+        let enemy_blocks = state.game
+            .ships
+            .values()
+            .filter(|ship| ship.owner != state.me().id)
+            .any(|ship| ship.position == state.me().shipyard.position);
+
+        if enemy_blocks && self.kamikaze.is_none() {
+            let t = state.me().shipyard.position;
+            let id = self.ship_ais.iter()
+                .filter(|(id, ai)| ai.is_returning_collector())
+                .map(|(&id, ai)| (id, state.get_ship(id).position))
+                .map(|(id, pos)| (id, (pos.x - t.x).abs() + (pos.y - t.y).abs()))
+                .min_by_key(|&(id, dist)| dist).unwrap().0;
+            self.kamikaze = Some(id);
+            *self.ship_ais.get_mut(&id).unwrap() = ShipAI::Kamikaze;
         }
 
         let want_ship = if state.game.turn_number > 100 {
@@ -263,15 +313,9 @@ impl Commander {
             true
         };
 
-        let enemy_blocks = state.game
-            .ships
-            .values()
-            .filter(|ship| ship.owner != state.me().id)
-            .any(|ship| ship.position == state.me().shipyard.position);
-
         if enemy_blocks && state.me().halite >= state.game.constants.ship_cost
             || (want_ship && state.navi.is_safe(&state.me().shipyard.position))
-            && state.me().halite >= state.game.constants.ship_cost * 2
+            && state.me().halite >= state.game.constants.ship_cost
             {
                 let cmd = state.me().shipyard.spawn();
                 state.command_queue.push(cmd);
