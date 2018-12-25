@@ -23,7 +23,6 @@ use std::time::UNIX_EPOCH;
 mod hlt;
 mod movement;
 
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ShipTask {
     Greedy,
@@ -48,13 +47,11 @@ impl ShipTask {
 
     fn is_returning(&self) -> bool {
         match self {
-            ShipTask::ReturnNaive |
-            ShipTask::ReturnDijkstra => true,
+            ShipTask::ReturnNaive | ShipTask::ReturnDijkstra => true,
             _ => false,
         }
     }
 }
-
 
 #[derive(Eq, PartialEq)]
 struct DijkstraNode<C: Ord, T: Eq> {
@@ -128,7 +125,6 @@ impl ShipAI {
     }
 }
 
-
 pub struct GameState {
     game: Game,
     navi: Navi,
@@ -158,7 +154,8 @@ impl GameState {
         self.navi.update_frame(&self.game);
 
         if self.me().halite > self.last_halite {
-            let diff = (self.me().halite - self.last_halite) as f64 / self.me().ship_ids.len() as f64;
+            let diff =
+                (self.me().halite - self.last_halite) as f64 / self.me().ship_ids.len() as f64;
             self.collect_statistic.push(diff);
         } else {
             self.collect_statistic.push(0.0);
@@ -183,14 +180,14 @@ impl GameState {
     }
 
     fn rounds_left(&self) -> usize {
-       self.game.constants.max_turns - self.game.turn_number
+        self.game.constants.max_turns - self.game.turn_number
     }
 
     fn me(&self) -> &Player {
         &self.game.players[self.game.my_id.0]
     }
 
-    fn my_ships<'a>(&'a self) -> impl Iterator<Item=ShipId> + 'a {
+    fn my_ships<'a>(&'a self) -> impl Iterator<Item = ShipId> + 'a {
         self.me().ship_ids.iter().cloned()
     }
 
@@ -211,8 +208,7 @@ impl GameState {
         let mut queue = BinaryHeap::new();
         queue.push(DijkstraNode::new(0, (start, vec![])));
 
-        let maxlen =
-            ((start.x - dest.x).abs() + (start.y - dest.y).abs()).max(5) * 2; // todo: tweak me
+        let maxlen = ((start.x - dest.x).abs() + (start.y - dest.y).abs()).max(5) * 2; // todo: tweak me
 
         while let Some(node) = queue.pop() {
             let (pos, path) = node.data;
@@ -222,7 +218,7 @@ impl GameState {
             }
 
             if pos == dest {
-                return path
+                return path;
             }
 
             if visited.contains(&pos) {
@@ -230,7 +226,8 @@ impl GameState {
             }
             visited.insert(pos);
 
-            let movement_cost = self.game.map.at_position(&pos).halite / self.game.constants.move_cost_ratio;
+            let movement_cost =
+                self.game.map.at_position(&pos).halite / self.game.constants.move_cost_ratio;
 
             for d in Direction::get_all_cardinals() {
                 let p = pos.directional_offset(d);
@@ -277,7 +274,6 @@ impl Commander {
     }
 
     fn process_frame(&mut self, state: &mut GameState) {
-
         let shipyard_pos = state.me().shipyard.position;
 
         for id in self.lost_ships.drain() {
@@ -310,7 +306,8 @@ impl Commander {
             ai.think(*id, state);
         }
 
-        let enemy_blocks = state.game
+        let enemy_blocks = state
+            .game
             .ships
             .values()
             .filter(|ship| ship.owner != state.me().id)
@@ -318,11 +315,14 @@ impl Commander {
 
         if enemy_blocks && self.kamikaze.is_none() {
             let t = state.me().shipyard.position;
-            if let Some((id, _)) = self.ship_ais.iter()
+            if let Some((id, _)) = self
+                .ship_ais
+                .iter()
                 .filter(|(id, ai)| ai.is_returning_collector())
                 .map(|(&id, ai)| (id, state.get_ship(id).position))
                 .map(|(id, pos)| (id, (pos.x - t.x).abs() + (pos.y - t.y).abs()))
-                .min_by_key(|&(id, dist)| dist) {
+                .min_by_key(|&(id, dist)| dist)
+            {
                 self.kamikaze = Some(id);
                 *self.ship_ais.get_mut(&id).unwrap() = ShipAI::Kamikaze;
             }
@@ -330,7 +330,10 @@ impl Commander {
 
         let want_ship = if state.game.turn_number > 100 {
             // average halite collected per ship in the last 100 turns
-            let avg_collected = state.collect_statistic[state.game.turn_number - 100..].iter().sum::<f64>() / 100.0;
+            let avg_collected = state.collect_statistic[state.game.turn_number - 100..]
+                .iter()
+                .sum::<f64>()
+                / 100.0;
 
             let predicted_profit = avg_collected * state.rounds_left() as f64;
 
@@ -341,12 +344,11 @@ impl Commander {
 
         if enemy_blocks && state.me().halite >= state.game.constants.ship_cost
             || (want_ship && state.navi.is_safe(&state.me().shipyard.position))
-            && state.me().halite >= state.game.constants.ship_cost
-            {
-                let cmd = state.me().shipyard.spawn();
-                state.command_queue.push(cmd);
-            }
-
+                && state.me().halite >= state.game.constants.ship_cost
+        {
+            let cmd = state.me().shipyard.spawn();
+            state.command_queue.push(cmd);
+        }
     }
 }
 

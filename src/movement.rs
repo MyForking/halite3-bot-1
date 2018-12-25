@@ -1,9 +1,9 @@
+use super::GameState;
 use hlt::direction::Direction;
 use hlt::position::Position;
 use hlt::ship::Ship;
 use hlt::ShipId;
 use rand::Rng;
-use super::GameState;
 
 pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
     const PREFER_MOVE_FACTOR: usize = 2;
@@ -13,13 +13,15 @@ pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
         (ship.position, ship.halite)
     };
 
-    let movement_cost = state.game.map.at_position(&pos).halite / state.game.constants.move_cost_ratio;
+    let movement_cost =
+        state.game.map.at_position(&pos).halite / state.game.constants.move_cost_ratio;
 
     if cargo < movement_cost {
         return Direction::Still;
     }
 
-    let current_value = state.game.map.at_position(&pos).halite / state.game.constants.extract_ratio;
+    let current_value =
+        state.game.map.at_position(&pos).halite / state.game.constants.extract_ratio;
 
     let mov = Direction::get_all_cardinals()
         .into_iter()
@@ -31,9 +33,7 @@ pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
                 p,
             )
         })
-        .filter(|&(value, _, _)| {
-            value > movement_cost + current_value * PREFER_MOVE_FACTOR
-        })
+        .filter(|&(value, _, _)| value > movement_cost + current_value * PREFER_MOVE_FACTOR)
         .filter(|(_, _, p)| state.navi.is_safe(p))
         .max_by_key(|&(value, _, _)| value);
 
@@ -62,13 +62,15 @@ pub fn seek(state: &mut GameState, ship_id: ShipId) -> Direction {
     let target_pos = {
         let ship = state.get_ship(ship_id);
 
-        let movement_cost = state.game.map.at_entity(ship).halite / state.game.constants.move_cost_ratio;
+        let movement_cost =
+            state.game.map.at_entity(ship).halite / state.game.constants.move_cost_ratio;
 
         if ship.halite < movement_cost {
             return Direction::Still;
         }
 
-        let target = state.game
+        let target = state
+            .game
             .map
             .cells
             .iter()
@@ -76,7 +78,8 @@ pub fn seek(state: &mut GameState, ship_id: ShipId) -> Direction {
             .max_by_key(|cell| cell.halite)
             .unwrap();
 
-        let current_value = state.game.map.at_entity(ship).halite / state.game.constants.extract_ratio;
+        let current_value =
+            state.game.map.at_entity(ship).halite / state.game.constants.extract_ratio;
 
         if current_value * 4 >= target.halite * 3 {
             return Direction::Still;
@@ -126,15 +129,18 @@ pub fn kamikaze(state: &mut GameState, ship_id: ShipId) -> Direction {
     let d = path.first().cloned().unwrap_or(Direction::Still);
     let p = pos.directional_offset(d);
 
-    if p == dest && state.game
-        .ships
-        .values()
-        .filter(|ship| ship.owner != state.me().id)
-        .any(|ship| ship.position == dest) {
-        return d
+    if p == dest
+        && state
+            .game
+            .ships
+            .values()
+            .filter(|ship| ship.owner != state.me().id)
+            .any(|ship| ship.position == dest)
+    {
+        return d;
     }
 
-    if !state.navi.is_safe(&p)  {
+    if !state.navi.is_safe(&p) {
         return Direction::Still;
     } else {
         state.navi.mark_unsafe(&p, ship_id);
@@ -154,10 +160,10 @@ pub fn go_home(state: &mut GameState, ship_id: ShipId) -> Direction {
     let p = pos.directional_offset(d);
 
     if p == dest {
-        return d
+        return d;
     }
 
-    if !state.navi.is_safe(&p)  {
+    if !state.navi.is_safe(&p) {
         return Direction::Still;
     } else {
         state.navi.mark_unsafe(&p, ship_id);
