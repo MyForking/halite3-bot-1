@@ -318,13 +318,14 @@ impl Commander {
 
         if enemy_blocks && self.kamikaze.is_none() {
             let t = state.me().shipyard.position;
-            let id = self.ship_ais.iter()
+            if let Some((id, _)) = self.ship_ais.iter()
                 .filter(|(id, ai)| ai.is_returning_collector())
                 .map(|(&id, ai)| (id, state.get_ship(id).position))
                 .map(|(id, pos)| (id, (pos.x - t.x).abs() + (pos.y - t.y).abs()))
-                .min_by_key(|&(id, dist)| dist).unwrap().0;
-            self.kamikaze = Some(id);
-            *self.ship_ais.get_mut(&id).unwrap() = ShipAI::Kamikaze;
+                .min_by_key(|&(id, dist)| dist) {
+                self.kamikaze = Some(id);
+                *self.ship_ais.get_mut(&id).unwrap() = ShipAI::Kamikaze;
+            }
         }
 
         let want_ship = if state.game.turn_number > 100 {
