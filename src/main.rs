@@ -197,7 +197,8 @@ impl GameState {
         let maxlen = ((start.x - dest.x).abs() + (start.y - dest.y).abs()).max(5) * 2; // todo: tweak me
 
         while let Some(node) = queue.pop() {
-            let (pos, path) = node.data;
+            let (mut pos, path) = node.data;
+            pos = self.game.map.normalize(&pos);
 
             if path.len() > maxlen as usize {
                 continue;
