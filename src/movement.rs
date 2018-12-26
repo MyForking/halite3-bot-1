@@ -58,6 +58,7 @@ pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
             if visited.contains(&p) { continue }
             visited.insert(p);
             //Log::log(&format!("greedy ship {:?} evaluating position {:?}.", ship_id, p));
+            if p == syp { continue }
             if state.navi.is_unsafe(&p)  { continue }
             if state.game.map.at_position(&p).halite >= SEEK_LIMIT {
                 mov = Some((d, pos.directional_offset(d)));

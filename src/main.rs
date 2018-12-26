@@ -273,15 +273,30 @@ impl Commander {
             self.ship_ais.insert(id, ShipAI::new_collector());
         }
 
+        let syp = state.me().shipyard.position;
+
         if let Some(id) = self.kamikaze {
-            if state.get_ship(id).position == state.me().shipyard.position {
+            if state.get_ship(id).position == syp {
                 *self.ship_ais.get_mut(&id).unwrap() = ShipAI::new_collector();
                 self.kamikaze = None;
             }
         }
 
-        for (id, ai) in &mut self.ship_ais {
-            ai.think(*id, state);
+        for (&id, ai) in &mut self.ship_ais {
+            if state.get_ship(id).position == syp {
+                Log::log(&format!("force moving ship {:?} from spawn", id));
+                for d in Direction::get_all_cardinals() {
+                    let p = syp.directional_offset(d);
+                    if state.navi.is_safe(&p) {
+                        state.navi.mark_unsafe(&p, id);
+                        state.move_ship(id, d);
+                        Log::log(&format!("        to {:?}", d));
+                        break
+                    }
+                }
+            } else {
+                ai.think(id, state);
+            }
         }
 
         let enemy_blocks = state
