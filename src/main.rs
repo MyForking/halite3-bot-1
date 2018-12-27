@@ -5,14 +5,12 @@ extern crate rand;
 use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
-use hlt::game_map::GameMap;
 use hlt::log::Log;
 use hlt::navi::Navi;
 use hlt::player::Player;
 use hlt::position::Position;
 use hlt::ship::Ship;
 use hlt::ShipId;
-use rand::Rng;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
@@ -374,10 +372,10 @@ impl Commander {
             if let Some((id, _)) = self
                 .ship_ais
                 .iter()
-                .filter(|(id, ai)| ai.is_returning_collector())
-                .map(|(&id, ai)| (id, state.get_ship(id).position))
+                .filter(|(_, ai)| ai.is_returning_collector())
+                .map(|(&id, _)| (id, state.get_ship(id).position))
                 .map(|(id, pos)| (id, (pos.x - t.x).abs() + (pos.y - t.y).abs()))
-                .min_by_key(|&(id, dist)| dist)
+                .min_by_key(|&(_, dist)| dist)
             {
                 self.kamikaze = Some(id);
                 *self.ship_ais.get_mut(&id).unwrap() = ShipAI::Kamikaze;

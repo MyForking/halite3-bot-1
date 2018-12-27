@@ -1,11 +1,7 @@
 use super::GameState;
 use hlt::direction::Direction;
 use hlt::log::Log;
-use hlt::position::Position;
-use hlt::ship::Ship;
 use hlt::ShipId;
-use rand::Rng;
-use std::collections::{VecDeque, HashSet};
 
 pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
     const PREFER_MOVE_FACTOR: usize = 2;
@@ -127,8 +123,6 @@ pub fn return_naive(state: &mut GameState, ship_id: ShipId) -> Direction {
 }
 
 pub fn return_dijkstra(state: &mut GameState, ship_id: ShipId) -> Direction {
-    const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
-
     let pos = state.get_ship(ship_id).position;
 
     let dest = state.me().shipyard.position;
@@ -144,8 +138,6 @@ pub fn return_dijkstra(state: &mut GameState, ship_id: ShipId) -> Direction {
 }
 
 pub fn kamikaze(state: &mut GameState, ship_id: ShipId) -> Direction {
-    const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
-
     let pos = state.get_ship(ship_id).position;
 
     let dest = state.me().shipyard.position;
