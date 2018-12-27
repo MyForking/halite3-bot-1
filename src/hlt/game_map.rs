@@ -99,4 +99,8 @@ impl GameMap {
             cells,
         }
     }
+
+    pub fn iter(&self) -> impl Iterator<Item=&MapCell> {
+        self.cells.iter().flat_map(|row| row.iter())
+    }
 }

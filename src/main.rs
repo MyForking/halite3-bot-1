@@ -15,7 +15,7 @@ use hlt::ShipId;
 use rand::Rng;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::env;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -25,6 +25,7 @@ mod movement;
 
 enum ShipTask {
     Greedy,
+    Cleaner,
     Seek,
     ReturnNaive,
     ReturnDijkstra,
@@ -35,6 +36,7 @@ impl ShipTask {
     fn get_move(&self, state: &mut GameState, ship_id: ShipId) -> Direction {
         match self {
             ShipTask::Greedy => movement::greedy(state, ship_id),
+            ShipTask::Cleaner => movement::cleaner(state, ship_id),
             ShipTask::Seek => movement::seek(state, ship_id),
             ShipTask::ReturnNaive => movement::return_naive(state, ship_id),
             ShipTask::ReturnDijkstra => movement::return_dijkstra(state, ship_id),
@@ -76,12 +78,17 @@ impl<C: Ord, T: Eq> DijkstraNode<C, T> {
 
 enum ShipAI {
     Collector(ShipTask),
+    Cleaner(ShipTask),
     Kamikaze,
 }
 
 impl ShipAI {
     fn new_collector() -> Self {
         ShipAI::Collector(ShipTask::Greedy)
+    }
+
+    fn new_cleaner() -> Self {
+        ShipAI::Cleaner(ShipTask::Cleaner)
     }
 
     fn think(&mut self, ship_id: ShipId, state: &mut GameState) {
@@ -92,6 +99,19 @@ impl ShipAI {
                     match task {
                         ShipTask::Greedy if ship.is_full() => *task = ShipTask::ReturnDijkstra,
                         ShipTask::ReturnDijkstra if ship.halite == 0 => *task = ShipTask::Greedy,
+                        _ => {}
+                    }
+                }
+                let d = task.get_move(state, ship_id);
+                state.move_ship(ship_id, d);
+            }
+
+            ShipAI::Cleaner(ref mut task) => {
+                {
+                    let ship = state.get_ship(ship_id);
+                    match task {
+                        ShipTask::Cleaner if ship.is_full() => *task = ShipTask::ReturnDijkstra,
+                        ShipTask::ReturnDijkstra if ship.halite == 0 => *task = ShipTask::Cleaner,
                         _ => {}
                     }
                 }
@@ -121,6 +141,8 @@ pub struct GameState {
     command_queue: Vec<Command>,
     collect_statistic: Vec<f64>,
     last_halite: usize,
+
+    halite_percentiles: [usize; 101],
 }
 
 impl GameState {
@@ -132,6 +154,8 @@ impl GameState {
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
             last_halite: 5000,
             game,
+
+            halite_percentiles: [0; 101],
         };
 
         Game::ready("MyRustBot");
@@ -142,6 +166,14 @@ impl GameState {
     fn update_frame(&mut self) {
         self.game.update_frame();
         self.navi.update_frame(&self.game);
+
+        let mut map_halite: Vec<_> = self.game.map.iter().map(|cell| cell.halite).collect();
+        map_halite.sort_unstable();
+        let n = map_halite.len() - 1;
+        for i in 0..=100 {
+            self.halite_percentiles[i] = map_halite[(n * i) / 100];
+        }
+        //Log::log(&format!("Halite quartiles: {:?}", self.halite_percentiles));
 
         if self.me().halite > self.last_halite {
             let diff =
@@ -184,6 +216,30 @@ impl GameState {
     fn move_ship(&mut self, id: ShipId, d: Direction) {
         let cmd = self.get_ship(id).move_ship(d);
         self.command_queue.push(cmd);
+    }
+
+    fn get_nearest_halite_move(&self, start: Position, min_halite: usize) -> Option<Direction> {
+        let mut queue = VecDeque::new();
+        for d in Direction::get_all_cardinals() {
+            let p = start.directional_offset(d);
+            queue.push_back((p, d));
+        }
+        let mut visited = HashSet::new();
+        while let Some((mut p, d)) = queue.pop_front() {
+            p = self.game.map.normalize(&p);
+            if visited.contains(&p) { continue }
+            visited.insert(p);
+            if p == self.me().shipyard.position { continue }
+            if self.navi.is_unsafe(&p)  { continue }
+            if self.game.map.at_position(&p).halite >= min_halite {
+                return Some(d);
+            }
+            for dn in Direction::get_all_cardinals() {
+                let pn = p.directional_offset(dn);
+                queue.push_back((pn, d));
+            }
+        }
+        None
     }
 
     fn get_dijkstra_move(&self, start: Position, dest: Position) -> Direction {
@@ -283,6 +339,13 @@ impl Commander {
         }
 
         for (&id, ai) in &mut self.ship_ais {
+
+            if state.halite_percentiles[99] < 100 {
+                if let ShipAI::Collector(_) = ai {
+                    *ai = ShipAI::new_cleaner();
+                }
+            }
+
             if state.get_ship(id).position == syp {
                 Log::log(&format!("force moving ship {:?} from spawn", id));
                 for d in Direction::get_all_cardinals() {

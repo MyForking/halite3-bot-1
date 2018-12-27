@@ -9,6 +9,7 @@ use std::collections::{VecDeque, HashSet};
 
 pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
     const PREFER_MOVE_FACTOR: usize = 2;
+    const HARVEST_LIMIT: usize = 10;
     const SEEK_LIMIT: usize = 50;
 
     let (pos, cargo) = {
@@ -25,58 +26,64 @@ pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
 
     let syp = state.me().shipyard.position;
 
+    let current_halite =
+        state.game.map.at_position(&pos).halite;
+
     let current_value =
-        state.game.map.at_position(&pos).halite / state.game.constants.extract_ratio;
+        current_halite / state.game.constants.extract_ratio;
 
     let mut mov = Direction::get_all_cardinals()
         .into_iter()
         .map(|d| (d, pos.directional_offset(d)))
         .map(|(d, p)| {
             (
+                state.game.map.at_position(&p).halite,
                 state.game.map.at_position(&p).halite / state.game.constants.extract_ratio,
                 d,
                 p,
             )
         })
-        .filter(|&(value, _, _)| value >= 10)
-        .filter(|&(_, _, p)| p != syp)
-        .filter(|&(value, _, _)| value > movement_cost + current_value * PREFER_MOVE_FACTOR)
-        .filter(|(_, _, p)| state.navi.is_safe(p))
-        .max_by_key(|&(value, _, _)| value)
-        .map(|(_, d, p)| (d, p));
+        .filter(|&(halite, _, _, p)| halite >= HARVEST_LIMIT)
+        .filter(|&(_, _, _, p)| p != syp)
+        .filter(|&(_, value, _, _)| value > movement_cost + current_value * PREFER_MOVE_FACTOR)
+        .filter(|(_, _, _, p)| state.navi.is_safe(p))
+        .max_by_key(|&(_, value, _, _)| value)
+        .map(|(_, _, d, p)| (d, p));
 
     // if there is nothing to gather, find new resource location
-    if mov.is_none() && current_value < 10 {
-        let mut queue = VecDeque::new();
-        for d in Direction::get_all_cardinals() {
-            let p = pos.directional_offset(d);
-            queue.push_back((p, d));
+    if mov.is_none() && current_halite < SEEK_LIMIT {
+        mov = state.get_nearest_halite_move(pos, SEEK_LIMIT).map(|d| (d, pos.directional_offset(d)));
+        if let Some((_, p)) = mov {
+            Log::log(&format!("greedy ship {:?} found new target: {:?}.", ship_id, p));
+        } else {
+            Log::log(&format!("greedy ship {:?} does not know where to go.", ship_id));
         }
-        let mut visited = HashSet::new();
-        while let Some((mut p, d)) = queue.pop_front() {
-            p = state.game.map.normalize(&p);
-            if visited.contains(&p) { continue }
-            visited.insert(p);
-            //Log::log(&format!("greedy ship {:?} evaluating position {:?}.", ship_id, p));
-            if p == syp { continue }
-            if state.navi.is_unsafe(&p)  { continue }
-            if state.game.map.at_position(&p).halite >= SEEK_LIMIT {
-                mov = Some((d, pos.directional_offset(d)));
-                Log::log(&format!("greedy ship {:?} found new target: {:?}.", ship_id, p));
-                break
-            }
-            for dn in Direction::get_all_cardinals() {
-                let pn = p.directional_offset(dn);
-                queue.push_back((pn, d));
-            }
-        }
-        if mov.is_none() {Log::log(&format!("greedy ship {:?} does not know where to go.", ship_id)); }
     }
 
     let (d, p) = mov.unwrap_or((Direction::Still, pos));
 
     state.navi.mark_unsafe(&p, ship_id);
     d
+}
+
+pub fn cleaner(state: &mut GameState, ship_id: ShipId) -> Direction {
+    let (pos, cargo) = {
+        let ship = state.get_ship(ship_id);
+        (ship.position, ship.halite)
+    };
+
+    if state.game.map.at_position(&pos).halite > 0 {
+        return Direction::Still;
+    }
+
+    match state.get_nearest_halite_move(pos, 1) {
+        None => Direction::Still,
+        Some(d) => {
+            let p = pos.directional_offset(d);
+            state.navi.mark_unsafe(&p, ship_id);
+            d
+        }
+    }
 }
 
 pub fn seek(state: &mut GameState, ship_id: ShipId) -> Direction {
