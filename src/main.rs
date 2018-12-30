@@ -5,17 +5,15 @@ extern crate rand;
 use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
-use hlt::game_map::GameMap;
 use hlt::log::Log;
 use hlt::navi::Navi;
 use hlt::player::Player;
 use hlt::position::Position;
 use hlt::ship::Ship;
 use hlt::ShipId;
-use rand::Rng;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
-use std::collections::{BinaryHeap, HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::env;
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
@@ -26,6 +24,7 @@ mod movement;
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ShipTask {
     Greedy,
+    Cleaner,
     Seek,
     ReturnNaive,
     ReturnDijkstra,
@@ -37,6 +36,7 @@ impl ShipTask {
     fn get_move(&self, state: &mut GameState, ship_id: ShipId) -> Direction {
         match self {
             ShipTask::Greedy => movement::greedy(state, ship_id),
+            ShipTask::Cleaner => movement::cleaner(state, ship_id),
             ShipTask::Seek => movement::seek(state, ship_id),
             ShipTask::ReturnNaive => movement::return_naive(state, ship_id),
             ShipTask::ReturnDijkstra => movement::return_dijkstra(state, ship_id),
@@ -80,6 +80,7 @@ impl<C: Ord, T: Eq> DijkstraNode<C, T> {
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum ShipAI {
     Collector(ShipTask),
+    Cleaner(ShipTask),
     Kamikaze,
     GoHome,
 }
@@ -87,6 +88,10 @@ enum ShipAI {
 impl ShipAI {
     fn new_collector() -> Self {
         ShipAI::Collector(ShipTask::Greedy)
+    }
+
+    fn new_cleaner() -> Self {
+        ShipAI::Cleaner(ShipTask::Cleaner)
     }
 
     fn think(&mut self, ship_id: ShipId, state: &mut GameState) {
@@ -97,6 +102,19 @@ impl ShipAI {
                     match task {
                         ShipTask::Greedy if ship.is_full() => *task = ShipTask::ReturnDijkstra,
                         ShipTask::ReturnDijkstra if ship.halite == 0 => *task = ShipTask::Greedy,
+                        _ => {}
+                    }
+                }
+                let d = task.get_move(state, ship_id);
+                state.move_ship(ship_id, d);
+            }
+
+            ShipAI::Cleaner(ref mut task) => {
+                {
+                    let ship = state.get_ship(ship_id);
+                    match task {
+                        ShipTask::Cleaner if ship.is_full() => *task = ShipTask::ReturnDijkstra,
+                        ShipTask::ReturnDijkstra if ship.halite == 0 => *task = ShipTask::Cleaner,
                         _ => {}
                     }
                 }
@@ -131,6 +149,8 @@ pub struct GameState {
     command_queue: Vec<Command>,
     collect_statistic: Vec<f64>,
     last_halite: usize,
+
+    halite_percentiles: [usize; 101],
 }
 
 impl GameState {
@@ -142,6 +162,8 @@ impl GameState {
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
             last_halite: 5000,
             game,
+
+            halite_percentiles: [0; 101],
         };
 
         Game::ready("MyRustBot");
@@ -152,6 +174,14 @@ impl GameState {
     fn update_frame(&mut self) {
         self.game.update_frame();
         self.navi.update_frame(&self.game);
+
+        let mut map_halite: Vec<_> = self.game.map.iter().map(|cell| cell.halite).collect();
+        map_halite.sort_unstable();
+        let n = map_halite.len() - 1;
+        for i in 0..=100 {
+            self.halite_percentiles[i] = map_halite[(n * i) / 100];
+        }
+        //Log::log(&format!("Halite quartiles: {:?}", self.halite_percentiles));
 
         if self.me().halite > self.last_halite {
             let diff =
@@ -200,6 +230,30 @@ impl GameState {
         self.command_queue.push(cmd);
     }
 
+    fn get_nearest_halite_move(&self, start: Position, min_halite: usize) -> Option<Direction> {
+        let mut queue = VecDeque::new();
+        for d in Direction::get_all_cardinals() {
+            let p = start.directional_offset(d);
+            queue.push_back((p, d));
+        }
+        let mut visited = HashSet::new();
+        while let Some((mut p, d)) = queue.pop_front() {
+            p = self.game.map.normalize(&p);
+            if visited.contains(&p) { continue }
+            visited.insert(p);
+            if p == self.me().shipyard.position { continue }
+            if self.navi.is_unsafe(&p)  { continue }
+            if self.game.map.at_position(&p).halite >= min_halite {
+                return Some(d);
+            }
+            for dn in Direction::get_all_cardinals() {
+                let pn = p.directional_offset(dn);
+                queue.push_back((pn, d));
+            }
+        }
+        None
+    }
+
     fn get_dijkstra_path(&self, start: Position, dest: Position) -> Vec<Direction> {
         const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
 
@@ -211,7 +265,8 @@ impl GameState {
         let maxlen = ((start.x - dest.x).abs() + (start.y - dest.y).abs()).max(5) * 2; // todo: tweak me
 
         while let Some(node) = queue.pop() {
-            let (pos, path) = node.data;
+            let (mut pos, path) = node.data;
+            pos = self.game.map.normalize(&pos);
 
             if path.len() > maxlen as usize {
                 continue;
@@ -278,6 +333,9 @@ impl Commander {
 
         for id in self.lost_ships.drain() {
             self.ship_ais.remove(&id);
+            if self.kamikaze == Some(id) {
+                self.kamikaze = None
+            }
         }
 
         for id in self.new_ships.drain() {
@@ -285,25 +343,47 @@ impl Commander {
             self.ship_ais.insert(id, ShipAI::new_collector());
         }
 
+        let syp = state.me().shipyard.position;
+
         if let Some(id) = self.kamikaze {
-            if state.get_ship(id).position == shipyard_pos {
+            if state.get_ship(id).position == syp {
                 *self.ship_ais.get_mut(&id).unwrap() = ShipAI::new_collector();
                 self.kamikaze = None;
             }
         }
 
-        for (id, ai) in &mut self.ship_ais {
+        for (&id, ai) in &mut self.ship_ais {
             if state.rounds_left() < 150 && ai != &ShipAI::GoHome {
                 const GO_HOME_SAFETY_FACTOR: usize = 1;
 
-                let path = state.get_dijkstra_path(state.get_ship(*id).position, shipyard_pos);
+                let path = state.get_dijkstra_path(state.get_ship(id).position, shipyard_pos);
 
                 if path.len() >= state.rounds_left() - self.ships.len() * GO_HOME_SAFETY_FACTOR {
                     *ai = ShipAI::GoHome;
                 }
             }
 
-            ai.think(*id, state);
+            if state.halite_percentiles[99] < 100 {
+                if let ShipAI::Collector(_) = ai {
+                    *ai = ShipAI::new_cleaner();
+                }
+            }
+
+            if state.get_ship(id).position == syp && ai != &ShipAI::GoHome {
+                Log::log(&format!("force moving ship {:?} from spawn", id));
+                for d in Direction::get_all_cardinals() {
+                    let p = syp.directional_offset(d);
+                    if state.navi.is_safe(&p) {
+                        state.navi.mark_unsafe(&p, id);
+                        state.move_ship(id, d);
+                        Log::log(&format!("        to {:?}", d));
+                        break
+                    }
+                }
+            } else {
+                ai.think(id, state);
+            }
+
         }
 
         let enemy_blocks = state
@@ -318,10 +398,10 @@ impl Commander {
             if let Some((id, _)) = self
                 .ship_ais
                 .iter()
-                .filter(|(id, ai)| ai.is_returning_collector())
-                .map(|(&id, ai)| (id, state.get_ship(id).position))
+                .filter(|(_, ai)| ai.is_returning_collector())
+                .map(|(&id, _)| (id, state.get_ship(id).position))
                 .map(|(id, pos)| (id, (pos.x - t.x).abs() + (pos.y - t.y).abs()))
-                .min_by_key(|&(id, dist)| dist)
+                .min_by_key(|&(_, dist)| dist)
             {
                 self.kamikaze = Some(id);
                 *self.ship_ais.get_mut(&id).unwrap() = ShipAI::Kamikaze;

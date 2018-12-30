@@ -1,6 +1,6 @@
 use hlt::direction::Direction;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub struct Position {
     pub x: i32,
     pub y: i32,
@@ -29,5 +29,9 @@ impl Position {
             self.directional_offset(Direction::East),
             self.directional_offset(Direction::West),
         ]
+    }
+
+    pub fn distance(&self, other: &Self) -> i32 {
+        (self.x - other.x).abs() + (self.y - other.y).abs()
     }
 }

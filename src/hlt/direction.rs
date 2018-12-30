@@ -1,4 +1,4 @@
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Direction {
     North,
     East,
@@ -30,10 +30,10 @@ impl Direction {
 
     pub fn get_all_cardinals() -> Vec<Direction> {
         vec![
-            Direction::North,
-            Direction::South,
             Direction::East,
             Direction::West,
+            Direction::North,
+            Direction::South,
         ]
     }
 
