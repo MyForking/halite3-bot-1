@@ -28,9 +28,9 @@ def softmax(x):
 
 class Agent:
     def __init__(self, input_shape, n_hidden):
-        ws = np.random.randn(n_hidden, *input_shape)
-        w1 = np.random.randn(n_hidden, *input_shape)
-        w2 = np.random.randn(n_hidden)
+        ws = np.random.randn(n_hidden, *input_shape) / np.sqrt(np.prod(input_shape))
+        w1 = np.random.randn(n_hidden, *input_shape) / np.sqrt(np.prod(input_shape))
+        w2 = np.random.randn(n_hidden) / np.sqrt(n_hidden)
         self.set_weights(ws, w1, w2)
         
     def set_weights(self, ws, w1, w2):
@@ -39,11 +39,13 @@ class Agent:
         self.w1 = np.stack([ws, w1, np.rot90(w1, 1, axes=(1, 2)), np.rot90(w1, 2, axes=(1, 2)), np.rot90(w1, 3, axes=(1, 2))])
         self.w2 = w2        
     
+    @nb.jit
     def forward_step(self, x):
         h = np.maximum(0, np.einsum('khij,ij->kh', self.w1, x))  # hidden layer relu activations
         logp = np.einsum('h,kh->k', self.w2, h)
         return logp, h
     
+    @nb.jit
     def backward_step(self, nx, nh, ndlogp):
         """nx, nh and nlogp are stacks of collected hidden states and gradient-logprobs"""
         dw2 = np.einsum('nkh,nk->h', nh, ndlogp)
@@ -51,6 +53,47 @@ class Agent:
         dh[nh <= 0] = 0
         dw1 = np.einsum('nkh,nij->khij', dh, nx)
         return dw1, dw2
+              
+    
+@nb.jit
+def forward_step(x, w1, w2):
+    h = np.maximum(0, np.einsum('khij,ij->kh', w1, x))  # hidden layer relu activations
+    logp = np.einsum('h,kh->k', w2, h)
+    return logp, h
+    
+@nb.jit    
+def run_agent(n_steps, pos, w1, w2, mapdata):
+    collected = 0
+    
+    xs = np.empty((n_steps, 2*r+1, 2*r+1))
+    hs = np.empty((n_steps, w1.shape[0], w1.shape[1]))
+    ps = np.empty((n_steps, 5))
+    
+    for i in range(n_steps):
+        pos = width + pos % width
+        x = mapdata[pos[0]-r:pos[0]+r+1, pos[1]-r:pos[1]+r+1]
+        logp, h = forward_step(x, w1, w2)
+        p = softmax(logp)
+        action = np.random.choice(5, p=p)
+        y = np.zeros(5); y[action] = 1
+        
+        if action == 0:
+            amount = np.ceil(mapdata[pos[0], pos[1]] / 4)
+            mapdata[pos[0], pos[1]] -= amount
+            collected += amount
+        elif action == 1:
+            pos[0] += 1
+        elif action == 2:
+            pos[1] += 1
+        elif action == 3:
+            pos[0] -= 1
+        elif action == 4:
+            pos[1] -= 1
+            
+        xs[i] = x
+        hs[i] = h
+        ps[i] = y - p
+    return collected, xs, hs, ps
     
     
 mapdata = get_map()    
@@ -61,7 +104,7 @@ width, height = mapdata.shape
 assert width == height
 mapdata0 = np.tile(mapdata, [3, 3])
 
-LEARNING_RATE = 1e-4
+LEARNING_RATE = 1e-3
 DECAY_RATE = 0.9
 
 batchsize = 100
@@ -85,37 +128,13 @@ batch = 0
 while True:
     batch += 1
     xs, hs, ps, rs = [], [], [], []
+    pos = np.random.randint(width, 2*width, 2)
     for _ in range(batchsize):
-        mapdata = mapdata0.copy()
-        pos = np.random.randint(width, 2*width, 2)
-        #pos = np.array([10, 20])
-        collected = 0
-        
-        for _ in range(n_steps):
-            pos = width + pos % width
-            x = mapdata[pos[0]-r:pos[0]+r+1, pos[1]-r:pos[1]+r+1]
-            logp, h = agent.forward_step(x)
-            p = softmax(logp)
-            action = np.random.choice(5, p=p)
-            y = np.zeros(5); y[action] = 1
-            
-            if action == 0:
-                amount = np.ceil(mapdata[pos[0], pos[1]] / 4)
-                mapdata[pos[0], pos[1]] -= amount
-                collected += amount
-            elif action == 1:
-                pos[0] += 1
-            elif action == 2:
-                pos[1] += 1
-            elif action == 3:
-                pos[0] -= 1
-            elif action == 4:
-                pos[1] -= 1
-                
-            xs.append(x)
-            hs.append(h)
-            ps.append(y - p)
-        rs.extend([collected] * n_steps)  # reward for all actions in that run
+        collected, x, h, p = run_agent(n_steps, pos.copy(), agent.w1, agent.w2, mapdata0.copy())
+        rs.extend([collected] * n_steps)
+        xs.extend(x)
+        hs.extend(h)
+        ps.extend(p)
     
     xs = np.array(xs)
     hs = np.array(hs)
@@ -133,7 +152,7 @@ while True:
         rs -= np.mean(rs)
         rs /= np.std(rs)
     else:
-        rs = np.sign(rs)
+        rs -= np.mean(rs)
     
     ps *= rs[:, None]
     
