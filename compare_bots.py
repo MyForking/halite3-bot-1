@@ -20,9 +20,12 @@ if __name__ == '__main__':
 
     bot1, bot2 = bot1, bot2
 
+    n = 100
+
     scores = []
-    for _ in ProgressBar()(range(1000)):
+    for _ in ProgressBar()(range(n//2)):
         scores.append(run_game(bot1, bot2))
+        scores.append(run_game(bot2, bot1))
 
     scores = np.transpose(scores).T
     print(bot1, 'vs', bot2)
@@ -32,5 +35,5 @@ if __name__ == '__main__':
     print(np.mean(scores[:, 0] - scores[:, 1]))
     print(np.std(scores[:, 0] - scores[:, 1]))
 
-    plt.hist(scores[:, 0] - scores[:, 1], 33)
+    plt.hist(scores[:, 0] - scores[:, 1], int(np.sqrt(n)))
     plt.show()
