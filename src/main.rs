@@ -293,7 +293,7 @@ impl Commander {
         }
 
         for (id, ai) in &mut self.ship_ais {
-            if ai != &ShipAI::GoHome {
+            if state.rounds_left() < 150 && ai != &ShipAI::GoHome {
                 const GO_HOME_SAFETY_FACTOR: usize = 1;
 
                 let path = state.get_dijkstra_path(state.get_ship(*id).position, shipyard_pos);
