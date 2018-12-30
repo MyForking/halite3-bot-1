@@ -5,7 +5,7 @@ use hlt::ShipId;
 use rand::Rng;
 
 pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
-    const PREFER_MOVE_FACTOR: usize = 2;
+    const PREFER_STAY_FACTOR: usize = 2;
     const HARVEST_LIMIT: usize = 10;
     const SEEK_LIMIT: usize = 50;
 
@@ -42,7 +42,7 @@ pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
         })
         .filter(|&(halite, _, _, p)| halite >= HARVEST_LIMIT)
         .filter(|&(_, _, _, p)| p != syp)
-        .filter(|&(_, value, _, _)| value > movement_cost + current_value * PREFER_MOVE_FACTOR)
+        .filter(|&(_, value, _, _)| value > movement_cost + current_value * PREFER_STAY_FACTOR)
         .filter(|(_, _, _, p)| state.navi.is_safe(p))
         .max_by_key(|&(_, value, _, _)| value)
         .map(|(_, _, d, p)| (d, p));
@@ -55,6 +55,42 @@ pub fn greedy(state: &mut GameState, ship_id: ShipId) -> Direction {
         } else {
             Log::log(&format!("greedy ship {:?} does not know where to go.", ship_id));
         }
+    }
+
+    let (d, p) = mov.unwrap_or((Direction::Still, pos));
+
+    state.navi.mark_unsafe(&p, ship_id);
+    d
+}
+
+pub fn thorough(state: &mut GameState, ship_id: ShipId) -> Direction {
+    const HARVEST_LIMIT: usize = 50;
+
+    let (pos, cargo) = {
+        let ship = state.get_ship(ship_id);
+        (ship.position, ship.halite)
+    };
+
+    let movement_cost =
+        state.game.map.at_position(&pos).halite / state.game.constants.move_cost_ratio;
+
+    let syp = state.me().shipyard.position;
+
+    let current_halite =
+        state.game.map.at_position(&pos).halite;
+
+    if current_halite >= HARVEST_LIMIT {
+        return Direction::Still;
+    }
+
+    let current_value =
+        current_halite / state.game.constants.extract_ratio;
+
+    let mov = state.get_nearest_halite_move(pos, HARVEST_LIMIT).map(|d| (d, pos.directional_offset(d)));
+    if let Some((_, p)) = mov {
+        Log::log(&format!("thorough ship {:?} found new target: {:?}.", ship_id, p));
+    } else {
+        Log::log(&format!("thorough ship {:?} does not know where to go.", ship_id));
     }
 
     let (d, p) = mov.unwrap_or((Direction::Still, pos));
@@ -81,40 +117,6 @@ pub fn cleaner(state: &mut GameState, ship_id: ShipId) -> Direction {
             d
         }
     }
-}
-
-pub fn seek(state: &mut GameState, ship_id: ShipId) -> Direction {
-    let target_pos = {
-        let ship = state.get_ship(ship_id);
-
-        let movement_cost =
-            state.game.map.at_entity(ship).halite / state.game.constants.move_cost_ratio;
-
-        if ship.halite < movement_cost {
-            return Direction::Still;
-        }
-
-        let target = state
-            .game
-            .map
-            .cells
-            .iter()
-            .flat_map(|sub| sub.iter())
-            .max_by_key(|cell| cell.halite)
-            .unwrap();
-
-        let current_value =
-            state.game.map.at_entity(ship).halite / state.game.constants.extract_ratio;
-
-        if current_value * 4 >= target.halite * 3 {
-            return Direction::Still;
-        }
-
-        target.position
-    };
-
-    let ship = state.get_ship(ship_id).clone();
-    state.navi.naive_navigate(&ship, &target_pos)
 }
 
 pub fn return_naive(state: &mut GameState, ship_id: ShipId) -> Direction {

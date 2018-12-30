@@ -25,7 +25,6 @@ mod movement;
 enum ShipTask {
     Greedy,
     Cleaner,
-    Seek,
     ReturnNaive,
     ReturnDijkstra,
     Kamikaze,
@@ -37,7 +36,6 @@ impl ShipTask {
         match self {
             ShipTask::Greedy => movement::greedy(state, ship_id),
             ShipTask::Cleaner => movement::cleaner(state, ship_id),
-            ShipTask::Seek => movement::seek(state, ship_id),
             ShipTask::ReturnNaive => movement::return_naive(state, ship_id),
             ShipTask::ReturnDijkstra => movement::return_dijkstra(state, ship_id),
             ShipTask::Kamikaze => movement::kamikaze(state, ship_id),
@@ -409,7 +407,7 @@ impl Commander {
         }
 
         let want_ship = if state.game.turn_number > 100 {
-            // average halite collected per ship in the last 100 turns
+            // average halite collected per ship in the last n turns
             let avg_collected = state.collect_statistic[state.game.turn_number - 100..]
                 .iter()
                 .sum::<f64>()
