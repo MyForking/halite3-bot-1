@@ -13,15 +13,17 @@ use hlt::ship::Ship;
 use hlt::ShipId;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
+use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::env;
-use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
+//use std::time::SystemTime;
+//use std::time::UNIX_EPOCH;
+use std::rc::Rc;
 
 mod hlt;
 mod movement;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 enum ShipTask {
     Greedy,
     Cleaner,
@@ -34,7 +36,8 @@ enum ShipTask {
 impl ShipTask {
     fn get_move(&self, state: &mut GameState, ship_id: ShipId) -> Direction {
         match self {
-            ShipTask::Greedy => movement::greedy(state, ship_id),
+            //ShipTask::Greedy => movement::greedy(state, ship_id),
+            ShipTask::Greedy => movement::nn_collect(state, ship_id),
             ShipTask::Cleaner => movement::cleaner(state, ship_id),
             ShipTask::ReturnNaive => movement::return_naive(state, ship_id),
             ShipTask::ReturnDijkstra => movement::return_dijkstra(state, ship_id),
@@ -75,7 +78,7 @@ impl<C: Ord, T: Eq> DijkstraNode<C, T> {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 enum ShipAI {
     Collector(ShipTask),
     Cleaner(ShipTask),
@@ -149,10 +152,12 @@ pub struct GameState {
     last_halite: usize,
 
     halite_percentiles: [usize; 101],
+
+    collector_net: movement::CollectorNeuralNet,
 }
 
 impl GameState {
-    fn new() -> Self {
+    fn new(net: movement::CollectorNeuralNet) -> Self {
         let game = Game::new();
         let state = GameState {
             navi: Navi::new(game.map.width, game.map.height),
@@ -162,6 +167,8 @@ impl GameState {
             game,
 
             halite_percentiles: [0; 101],
+
+            collector_net: net,
         };
 
         Game::ready("MyRustBot");
@@ -192,9 +199,6 @@ impl GameState {
         self.last_halite = self.me().halite;
 
         self.command_queue.clear();
-
-        let ids = self.me().ship_ids.clone();
-        //self.ship_ais.retain(|ship_id, _| ids.contains(ship_id));
     }
 
     fn finalize_frame(&mut self) {
@@ -432,14 +436,14 @@ impl Commander {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let rng_seed: u64 = if args.len() > 1 {
+    /*let rng_seed: u64 = if args.len() > 1 {
         args[1].parse().unwrap()
     } else {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
-    };
+    };*/
     /*let seed_bytes: Vec<u8> = (0..16).map(|x| ((rng_seed >> (x % 8)) & 0xFF) as u8).collect();
     let mut rng: XorShiftRng = SeedableRng::from_seed([
         seed_bytes[0], seed_bytes[1], seed_bytes[2], seed_bytes[3],
@@ -448,8 +452,16 @@ fn main() {
         seed_bytes[12], seed_bytes[13], seed_bytes[14], seed_bytes[15]
     ]);*/
 
+    let net = if args.len() > 1 {
+        Log::log(&format!("loading network from file {}", args[1]));
+        movement::CollectorNeuralNet::from_file(&args[1])
+    } else {
+        Log::log("using default network");
+        movement::CollectorNeuralNet::new()
+    };
+
     let mut commander = Commander::new();
-    let mut game = GameState::new();
+    let mut game = GameState::new(net);
 
     loop {
         game.update_frame();
