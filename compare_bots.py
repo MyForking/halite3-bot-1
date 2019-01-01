@@ -25,7 +25,7 @@ if __name__ == '__main__':
     scores = []
     for _ in ProgressBar()(range(n//2)):
         scores.append(run_game(bot1, bot2))
-        scores.append(run_game(bot2, bot1))
+        scores.append(run_game(bot2, bot1)[::-1])
 
     scores = np.transpose(scores).T
     print(bot1, 'vs', bot2)
