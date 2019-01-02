@@ -76,12 +76,15 @@ def forward_step(x, w1, w2):
     return logp, h
     
 @nb.jit
-def run_agent(n_steps, pos, w1, w2, mapdata):
+def run_agent(n_steps, pos, w1, w2, mapdata, deterministic=False):
     collected = 0
     
     xs = np.empty((n_steps, w1.shape[1]))
     hs = np.empty((n_steps, w1.shape[0]))
     ps = np.empty((n_steps, 5))
+    rs = np.empty((n_steps, 1))
+    
+    path = np.empty((n_steps, 2))
     
     for i in range(n_steps):
         pos = width + pos % width
@@ -89,7 +92,10 @@ def run_agent(n_steps, pos, w1, w2, mapdata):
         x = np.concatenate([[1], x])
         logp, h = forward_step(x, w1, w2)
         p = softmax(logp)
-        action = np.random.choice(5, p=p)
+        if deterministic:
+            action = np.argmax(p)
+        else:
+            action = np.random.choice(5, p=p)
         y = np.zeros(5); y[action] = 1
             
         cost = np.floor(mapdata[pos[0], pos[1]] / 10)
@@ -110,11 +116,13 @@ def run_agent(n_steps, pos, w1, w2, mapdata):
                 pos[0] -= 1
             elif action == 4:
                 pos[1] -= 1
+                
+        path[i] = pos
             
         xs[i] = x
         hs[i] = h
         ps[i] = y - p
-    return collected, xs, hs, ps
+    return collected, xs, hs, ps, path
     
     
 mapdata = get_map()    
@@ -125,14 +133,14 @@ width, height = mapdata.shape
 assert width == height
 mapdata0 = np.tile(mapdata, [3, 3])
 
-LEARNING_RATE = 1e-2
+LEARNING_RATE = 1e-4
 DECAY_RATE = 0.9
-L1_FACTOR = 1e-3
+L1_FACTOR = LEARNING_RATE * 1.0
 
 batchsize = 100
 r = 2
 n_steps = 50
-agent = Agent(((r*2+1)**2)+1, 15)
+agent = Agent(((r*2+1)**2)+1, 25)
 
 #ws = np.zeros((1, 5, 5))
 #ws[0, 2, 2] = 0.1
@@ -156,10 +164,8 @@ while True:
     mapdata = get_map()    
     width, height = mapdata.shape
     mapdata0 = np.tile(mapdata, [3, 3])
-
-    plt.imshow(mapdata0)
-    plt.colorbar()
-    plt.show()
+        
+    pos = np.random.randint(width, 2*width, 2)
     
     if counter < 1000:
         counter *= 2
@@ -167,7 +173,6 @@ while True:
     for _ in range(counter):
         batch += 1
         xs, hs, ps, rs = [], [], [], []
-        pos = np.random.randint(width, 2*width, 2)
         
 #        for _ in range(batchsize):
 #            collected, x, h, p = run_agent(n_steps, pos.copy(), agent.w1, agent.w2, mapdata0.copy())
@@ -178,7 +183,7 @@ while True:
         
         results = [run_agent(n_steps, pos.copy(), agent.w1, agent.w2, mapdata0.copy()) for _ in range(batchsize)]
         #results = Parallel(n_jobs=5)(delayed(run_wrap)(n_steps, pos.copy(), agent.w1, agent.w2, mapdata0.copy()) for _ in range(batchsize))
-        for collected, x, h, p in results:
+        for collected, x, h, p, _ in results:
             rs.extend([collected] * n_steps)
             xs.extend(x)
             hs.extend(h)
@@ -218,13 +223,35 @@ while True:
         agent.w1 += LEARNING_RATE * dw1 / (np.sqrt(rmsprop_dw1) + 1e-5)
         agent.w2 += LEARNING_RATE * dw2 / (np.sqrt(rmsprop_dw2) + 1e-5)
     
-    np.savez('ai2d.npz', w1=agent.w1, w2=agent.w2, mean_reward=mean_reward)
+    np.savez('ai2e.npz', w1=agent.w1, w2=agent.w2, mean_reward=mean_reward)
     plt.subplot(2, 1, 1)
     plt.plot(mean_reward)
     plt.grid()
     plt.subplot(2, 1, 2)
     plt.plot(np.reshape(all_w2, (len(all_w2), -1)), alpha=0.5)
     plt.grid()
+
+    plt.figure()
+    
+    mapdata = mapdata0.copy()
+    _, _, _, _, path = run_agent(n_steps, pos.copy(), agent.w1, agent.w2, mapdata, deterministic=True)
+    plt.imshow(mapdata)
+    plt.colorbar()
+        
+    rgb = np.stack([np.linspace(1, 1, len(path)),
+        np.linspace(0.5, 0, len(path)),
+        np.linspace(0, 0.5, len(path))]).T
+    
+    for i, ((y, x), c) in enumerate(zip(path, rgb)):
+        plt.plot(x, y, '.', color=c)
+        
+    mid = np.mean(path, axis=0)
+    
+    diff = max(np.max(path[:, 0]) - np.min(path[:, 0]), np.max(path[:, 1]) - np.min(path[:, 1]))
+        
+    plt.ylim(mid[0] - diff, mid[0] + diff)
+    plt.xlim(mid[1] - diff, mid[1] + diff)
+    
     plt.show()
     
     print(datetime.now(), upda, noup)
