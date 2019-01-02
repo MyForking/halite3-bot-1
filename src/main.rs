@@ -20,6 +20,8 @@ use std::env;
 //use std::time::UNIX_EPOCH;
 use std::rc::Rc;
 
+mod behavior_tree;
+mod bt_tasks;
 mod hlt;
 mod movement;
 
@@ -228,8 +230,29 @@ impl GameState {
     }
 
     fn move_ship(&mut self, id: ShipId, d: Direction) {
+        let p = self.get_ship(id).position.directional_offset(d);
+        self.navi.mark_unsafe(&p, id);
         let cmd = self.get_ship(id).move_ship(d);
         self.command_queue.push(cmd);
+    }
+
+    fn try_move_ship(&mut self, id: ShipId, d: Direction) -> bool {
+        let p = self.get_ship(id).position.directional_offset(d);
+        if self.navi.is_safe(&p) {
+            self.navi.mark_unsafe(&p, id);
+            let cmd = self.get_ship(id).move_ship(d);
+            self.command_queue.push(cmd);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn move_ship_or_wait(&mut self, id: ShipId, d: Direction) {
+        if !self.try_move_ship(id, d) {
+            let cmd = Command::move_ship(id, d);
+            self.command_queue.push(cmd);
+        }
     }
 
     fn get_nearest_halite_move(&self, start: Position, min_halite: usize) -> Option<Direction> {
@@ -241,10 +264,16 @@ impl GameState {
         let mut visited = HashSet::new();
         while let Some((mut p, d)) = queue.pop_front() {
             p = self.game.map.normalize(&p);
-            if visited.contains(&p) { continue }
+            if visited.contains(&p) {
+                continue;
+            }
             visited.insert(p);
-            if p == self.me().shipyard.position { continue }
-            if self.navi.is_unsafe(&p)  { continue }
+            if p == self.me().shipyard.position {
+                continue;
+            }
+            if self.navi.is_unsafe(&p) {
+                continue;
+            }
             if self.game.map.at_position(&p).halite >= min_halite {
                 return Some(d);
             }
@@ -379,13 +408,12 @@ impl Commander {
                         state.navi.mark_unsafe(&p, id);
                         state.move_ship(id, d);
                         Log::log(&format!("        to {:?}", d));
-                        break
+                        break;
                     }
                 }
             } else {
                 ai.think(id, state);
             }
-
         }
 
         let enemy_blocks = state
