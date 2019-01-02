@@ -201,8 +201,13 @@ impl GameState {
         self.command_queue.clear();
     }
 
-    fn finalize_frame(&mut self) {
+    fn finalize_frame(&mut self, runid: &str) {
         //Log::log(&format!("issuing commands: {:?}", command_queue));
+
+        if self.game.turn_number == self.game.constants.max_turns - 5 {
+            Log::log("dumping neural net");
+            self.collector_net.dump(&format!("netdump{}-{}.txt", runid, self.game.my_id.0));
+        }
 
         Game::end_turn(&self.command_queue);
 
@@ -345,6 +350,8 @@ impl Commander {
             self.ship_ais.insert(id, ShipAI::new_collector());
         }
 
+        Log::log(&format!("commanding {} ships", self.ships.len()));
+
         let syp = state.me().shipyard.position;
 
         if let Some(id) = self.kamikaze {
@@ -460,6 +467,12 @@ fn main() {
         movement::CollectorNeuralNet::new()
     };
 
+    let runid = if args.len() > 2 {
+        &args[2]
+    } else {
+        ""
+    };
+
     let mut commander = Commander::new();
     let mut game = GameState::new(net);
 
@@ -470,6 +483,6 @@ fn main() {
 
         commander.process_frame(&mut game);
 
-        game.finalize_frame();
+        game.finalize_frame(runid);
     }
 }

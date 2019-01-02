@@ -225,6 +225,8 @@ pub struct CollectorNeuralNet {
     n_input: usize,
     n_hidden: usize,
     n_output: usize,
+
+    activity_buffer: Vec<[Vec<f64>; 3]>
 }
 
 impl CollectorNeuralNet {
@@ -251,14 +253,35 @@ impl CollectorNeuralNet {
     }
 
     fn choice(&mut self, x: &[f64]) -> usize {
-        let out = self.forward_step(x);
-        out.iter().enumerate().fold((99, 0.0), |acc, (i, &o)| {
-            if o > acc.1 {
-                (i, o)
-            } else {
-                acc
+        let (a, p) = {
+            let out = self.forward_step(x);
+            let a = out.iter().enumerate().fold((0, 0.0), |acc, (i, &o)| {
+                if o > acc.1 {
+                    (i, o)
+                } else {
+                    acc
+                }
+            }).0;
+
+
+            let mut p = softmax(out);
+            for p in &mut p {
+                *p = -*p;
             }
-        }).0
+            p[a] += 1.0;
+
+            (a, p)
+        };
+
+        let x = x.iter().cloned().collect();
+        self.activity_buffer.push([x, self.hidden_activations.clone(), p]);
+
+        a
+    }
+
+    pub fn dump(&self, filename: &str) {
+        let mut f = File::create(filename).expect("could not write to file");
+        write!(f, "{:?}", self.activity_buffer).unwrap();
     }
 
     pub fn new() -> Self {
@@ -270,6 +293,7 @@ impl CollectorNeuralNet {
             layer2_weights: vec![-9.691367905640083, -6.009556473721567, -0.22499078650755963, -6.711995446621867, 7.493687060274628, -2.014735470973805, 7.12328518310814, 8.855478096927088, -9.670769211021263, 0.3154805175849566, -3.101239669038399, 8.053517218726363, 9.295992921218717, -0.900939227905212, 3.7538170936668473, 5.522910746681954, 0.21490741704369393, 0.23387254770423824, 4.79103172143686, -2.720164896509874, -0.5770973693314893, 5.9327922721722475, 3.152804931500022, 10.441076848577866, 0.1652996910202581, 2.6672271635492986, -3.3647394746894843, -0.13729508103143187, 10.123987407530006, 6.6834774317793695, 2.844388283423871, 0.5979499607918172, 0.24521219763893376, 1.004789482902983, -2.0698184566427726, 3.311339189283877, 0.9012815997266364, 2.955876658847291, 6.6075724261746, -0.23104324649449126, 2.3274086853652864, 3.7407399603623745, -1.6980654526324586, 6.916153173322643, 5.379219193838071, 5.865613386350487, 6.719341016743353, 0.19984756807034715, 6.216178812314847, 2.2006500001800626, 7.999663268340657, 0.9912451207733828, 2.9057156853645756, 10.877488391849536, -0.03450165101332448, 2.096261770879177, 0.9342327124606968, 0.7696041750037967, -19.742206165324735, -12.040727390322406, 8.453056812654618, 8.526620243377076, -0.30020131730180993, 3.0761048873652315, 2.3254111048657333, 0.8480285107646407, -2.5225807296253144, -1.6520654500800946, 3.6727220575816384, 0.03923430357729951, 8.052203873747418, 3.72896742801937, 0.5735201847859409, 8.420661381635389, 3.7120790628911253],
             hidden_activations: vec![0.0; 15],
             output_activations: vec![0.0; 5],
+            activity_buffer: vec![],
         }
     }
 
@@ -285,19 +309,23 @@ impl CollectorNeuralNet {
 
         let mut line = String::new();
         while buf_reader.read_line(&mut line).unwrap() > 0 {
-            let mut it = line.split(": ");
+            {
+                let mut it = line.split(": ");
 
-            let var = it.next().unwrap();
-            let val = it.next().unwrap();
+                let var = it.next().unwrap().trim();
+                let val = it.next().unwrap().trim();
 
-            match var {
-                "n_input" => n_input = val.parse().unwrap(),
-                "n_hidden" => n_hidden = val.parse().unwrap(),
-                "n_output" => n_output = val.parse().unwrap(),
-                "layer1_weights" => layer1_weights = val.split(", ").map(str::parse).map(Result::unwrap).collect(),
-                "layer2_weights" => layer2_weights = val.split(", ").map(str::parse).map(Result::unwrap).collect(),
-                _ => panic!("invalid name: {}", var),
+                match var {
+                    "n_input" => n_input = val.parse().expect(&format!("error parsing n_input = {:?}", val)),
+                    "n_hidden" => n_hidden = val.parse().expect(&format!("error parsing n_hidden = {:?}", val)),
+                    "n_output" => n_output = val.parse().expect(&format!("error parsing n_output = {:?}", val)),
+                    "layer1_weights" => layer1_weights = val.split(", ").map(str::parse).map(Result::unwrap).collect(),
+                    "layer2_weights" => layer2_weights = val.split(", ").map(str::parse).map(Result::unwrap).collect(),
+                    _ => panic!("invalid name: {}", var),
+                }
             }
+
+            line.clear();
         }
         let mut hidden_activations = vec![0.0; n_hidden];
         let mut output_activations = vec![0.0; n_output];
@@ -309,8 +337,19 @@ impl CollectorNeuralNet {
             layer1_weights,
             layer2_weights,
             hidden_activations,
-            output_activations
+            output_activations,
+            activity_buffer: vec![],
         }
     }
+}
+
+fn softmax(x: &[f64]) -> Vec<f64> {
+    let m = x.iter().cloned().fold(-99e99_f64, f64::max);
+    let mut expx: Vec<_> = x.iter().map(|x| (x - m).exp()).collect();
+    let total: f64 = expx.iter().sum();
+    for ex in &mut expx {
+        *ex /= total;
+    }
+    expx
 }
 
