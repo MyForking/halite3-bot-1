@@ -3,36 +3,34 @@ use hlt::direction::Direction;
 use hlt::ShipId;
 use GameState;
 
-type ShipEnv = (ShipId, GameState);
-
-fn try_move_ship(d: Direction) -> Box<impl BtNode<ShipEnv>> {
-    run_or_fail(move |(id, state): &mut ShipEnv| {
-        let p = state.get_ship(*id).position;
-        state.try_move_ship(*id, d)
+fn try_move_ship(id: ShipId, d: Direction) -> Box<impl BtNode<GameState>> {
+    run_or_fail(move |state: &mut GameState| {
+        let p = state.get_ship(id).position;
+        state.try_move_ship(id, d)
     })
 }
 
-fn deliver() -> Box<impl BtNode<ShipEnv>> {
-    lambda(|(id, state): &mut ShipEnv| {
-        if state.get_ship(*id).halite <= 0 {
+fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
+    lambda(move |state: &mut GameState| {
+        if state.get_ship(id).halite <= 0 {
             return BtState::Success;
         }
 
-        let pos = state.get_ship(*id).position;
+        let pos = state.get_ship(id).position;
         let dest = state.me().shipyard.position;
         let path = state.get_dijkstra_path(pos, dest);
         let d = path.first().cloned().unwrap_or(Direction::Still);
-        state.move_ship_or_wait(*id, d);
+        state.move_ship_or_wait(id, d);
 
         BtState::Running
     })
 }
 
-fn find_res() -> Box<impl BtNode<ShipEnv>> {
-    lambda(|(id, state): &mut ShipEnv| {
+fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
+    lambda(move |state: &mut GameState| {
         const SEEK_LIMIT: usize = 50;
 
-        let pos = state.get_ship(*id).position;
+        let pos = state.get_ship(id).position;
         let current_halite = state.game.map.at_position(&pos).halite;
 
         if current_halite >= SEEK_LIMIT {
@@ -41,7 +39,7 @@ fn find_res() -> Box<impl BtNode<ShipEnv>> {
 
         match state.get_nearest_halite_move(pos, SEEK_LIMIT) {
             Some(d) => {
-                state.move_ship(*id, d);
+                state.move_ship(id, d);
                 BtState::Running
             }
             None => BtState::Failure,
@@ -49,18 +47,18 @@ fn find_res() -> Box<impl BtNode<ShipEnv>> {
     })
 }
 
-fn greedy() -> Box<impl BtNode<ShipEnv>> {
-    lambda(|(id, state): &mut ShipEnv| {
+fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
+    lambda(move |state: &mut GameState| {
         const PREFER_STAY_FACTOR: usize = 2;
         const HARVEST_LIMIT: usize = 10;
         const SEEK_LIMIT: usize = 50;
 
-        if state.get_ship(*id).is_full() {
+        if state.get_ship(id).is_full() {
             return BtState::Success;
         }
 
         let (pos, cargo) = {
-            let ship = state.get_ship(*id);
+            let ship = state.get_ship(id);
             (ship.position, ship.halite)
         };
 
@@ -68,7 +66,7 @@ fn greedy() -> Box<impl BtNode<ShipEnv>> {
             state.game.map.at_position(&pos).halite / state.game.constants.move_cost_ratio;
 
         if cargo < movement_cost {
-            state.move_ship(*id, Direction::Still);
+            state.move_ship(id, Direction::Still);
             return BtState::Running;
         }
 
@@ -101,12 +99,12 @@ fn greedy() -> Box<impl BtNode<ShipEnv>> {
 
         let (d, _) = mov.unwrap_or((Direction::Still, pos));
 
-        state.move_ship(*id, d);
+        state.move_ship(id, d);
 
         BtState::Running
     })
 }
 
-fn collector() -> Box<impl BtNode<ShipEnv>> {
-    select(vec![sequence(vec![greedy(), deliver()]), find_res()])
+pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
+    select(vec![sequence(vec![greedy(id), deliver(id)]), find_res(id)])
 }

@@ -2,6 +2,8 @@
 extern crate lazy_static;
 extern crate rand;
 
+use behavior_tree::BtNode;
+use bt_tasks::collector;
 use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
@@ -250,7 +252,7 @@ impl GameState {
 
     fn move_ship_or_wait(&mut self, id: ShipId, d: Direction) {
         if !self.try_move_ship(id, d) {
-            let cmd = Command::move_ship(id, d);
+            let cmd = Command::move_ship(id, Direction::Still);
             self.command_queue.push(cmd);
         }
     }
@@ -336,19 +338,24 @@ impl GameState {
     }
 }
 
-#[derive(Default)]
 struct Commander {
     new_ships: HashSet<ShipId>,
     lost_ships: HashSet<ShipId>,
     ships: HashSet<ShipId>,
-    ship_ais: HashMap<ShipId, ShipAI>,
+    ship_ais: HashMap<ShipId, Box<dyn BtNode<GameState>>>,
 
     kamikaze: Option<ShipId>,
 }
 
 impl Commander {
     fn new() -> Self {
-        Self::default()
+        Commander {
+            new_ships: HashSet::new(),
+            lost_ships: HashSet::new(),
+            ships: HashSet::new(),
+            ship_ais: HashMap::new(),
+            kamikaze: None,
+        }
     }
 
     fn sync(&mut self, state: &GameState) {
@@ -371,20 +378,21 @@ impl Commander {
 
         for id in self.new_ships.drain() {
             self.ships.insert(id);
-            self.ship_ais.insert(id, ShipAI::new_collector());
+            self.ship_ais.insert(id, collector(id));
         }
 
         let syp = state.me().shipyard.position;
 
-        if let Some(id) = self.kamikaze {
+        /*if let Some(id) = self.kamikaze {
             if state.get_ship(id).position == syp {
                 *self.ship_ais.get_mut(&id).unwrap() = ShipAI::new_collector();
                 self.kamikaze = None;
             }
-        }
+        }*/
 
         for (&id, ai) in &mut self.ship_ais {
-            if state.rounds_left() < 150 && ai != &ShipAI::GoHome {
+            ai.tick(state);
+            /*if state.rounds_left() < 150 && ai != &ShipAI::GoHome {
                 const GO_HOME_SAFETY_FACTOR: usize = 1;
 
                 let path = state.get_dijkstra_path(state.get_ship(id).position, shipyard_pos);
@@ -392,15 +400,15 @@ impl Commander {
                 if path.len() >= state.rounds_left() - self.ships.len() * GO_HOME_SAFETY_FACTOR {
                     *ai = ShipAI::GoHome;
                 }
-            }
+            }*/
 
-            if state.halite_percentiles[99] < 100 {
+            /*if state.halite_percentiles[99] < 100 {
                 if let ShipAI::Collector(_) = ai {
                     *ai = ShipAI::new_cleaner();
                 }
-            }
+            }*/
 
-            if state.get_ship(id).position == syp && ai != &ShipAI::GoHome {
+            /*if state.get_ship(id).position == syp && ai != &ShipAI::GoHome {
                 Log::log(&format!("force moving ship {:?} from spawn", id));
                 for d in Direction::get_all_cardinals() {
                     let p = syp.directional_offset(d);
@@ -413,7 +421,7 @@ impl Commander {
                 }
             } else {
                 ai.think(id, state);
-            }
+            }*/
         }
 
         let enemy_blocks = state
@@ -423,7 +431,7 @@ impl Commander {
             .filter(|ship| ship.owner != state.me().id)
             .any(|ship| ship.position == state.me().shipyard.position);
 
-        if enemy_blocks && self.kamikaze.is_none() {
+        /*if enemy_blocks && self.kamikaze.is_none() {
             let t = state.me().shipyard.position;
             if let Some((id, _)) = self
                 .ship_ais
@@ -436,7 +444,7 @@ impl Commander {
                 self.kamikaze = Some(id);
                 *self.ship_ais.get_mut(&id).unwrap() = ShipAI::Kamikaze;
             }
-        }
+        }*/
 
         let want_ship = if state.game.turn_number > 100 {
             // average halite collected per ship in the last n turns
