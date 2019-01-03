@@ -135,12 +135,18 @@ mapdata0 = np.tile(mapdata, [3, 3])
 
 LEARNING_RATE = 1e-4
 DECAY_RATE = 0.9
-L1_FACTOR = LEARNING_RATE * 1.0
+L1_FACTOR = LEARNING_RATE * 0.01
 
 batchsize = 100
 r = 2
 n_steps = 50
 agent = Agent(((r*2+1)**2)+1, 25)
+
+#a = np.load('ai2e.npz')
+#agent.w1 = a['w1']
+#agent.w2 = a['w2']
+#del a
+
 
 #ws = np.zeros((1, 5, 5))
 #ws[0, 2, 2] = 0.1
@@ -223,7 +229,7 @@ while True:
         agent.w1 += LEARNING_RATE * dw1 / (np.sqrt(rmsprop_dw1) + 1e-5)
         agent.w2 += LEARNING_RATE * dw2 / (np.sqrt(rmsprop_dw2) + 1e-5)
     
-    np.savez('ai2e.npz', w1=agent.w1, w2=agent.w2, mean_reward=mean_reward)
+    np.savez('ai2f.npz', w1=agent.w1, w2=agent.w2, mean_reward=mean_reward)
     plt.subplot(2, 1, 1)
     plt.plot(mean_reward)
     plt.grid()
@@ -249,8 +255,8 @@ while True:
     
     diff = max(np.max(path[:, 0]) - np.min(path[:, 0]), np.max(path[:, 1]) - np.min(path[:, 1]))
         
-    plt.ylim(mid[0] - diff, mid[0] + diff)
-    plt.xlim(mid[1] - diff, mid[1] + diff)
+    plt.ylim(mid[0] - diff//2, mid[0] + diff//2)
+    plt.xlim(mid[1] - diff//2, mid[1] + diff//2)
     
     plt.show()
     
