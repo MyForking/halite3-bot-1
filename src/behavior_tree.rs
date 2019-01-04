@@ -36,6 +36,13 @@ pub fn select<E>(children: Vec<NodePtr<E>>) -> Box<impl BtNode<E>> {
     Box::new(Selector::new(children))
 }
 
+pub fn interrupt<E, P: FnMut(&mut E) -> bool>(
+    child: NodePtr<E>,
+    mut func: P,
+) -> Box<impl BtNode<E>> {
+    Box::new(Interrupt::new(child, func))
+}
+
 pub fn run_or_fail<E, P: FnMut(&mut E) -> bool>(mut func: P) -> Box<impl BtNode<E>> {
     let mut state = BtState::NotStarted;
     lambda(move |e| match state {
@@ -156,6 +163,36 @@ impl<E> BtNode<E> for Selector<E> {
                 }
                 BtState::NotStarted => panic!("Child tick returned NotStarted"),
             }
+        }
+    }
+}
+
+struct Interrupt<E, P>
+where
+    P: FnMut(&mut E) -> bool,
+{
+    child: NodePtr<E>,
+    predicate: P,
+}
+
+impl<E, P> Interrupt<E, P>
+where
+    P: FnMut(&mut E) -> bool,
+{
+    fn new(child: NodePtr<E>, predicate: P) -> Self {
+        Interrupt { child, predicate }
+    }
+}
+
+impl<E, P> BtNode<E> for Interrupt<E, P>
+where
+    P: FnMut(&mut E) -> bool,
+{
+    fn tick(&mut self, env: &mut E) -> BtState {
+        if (self.predicate)(env) {
+            BtState::Failure
+        } else {
+            self.child.tick(env)
         }
     }
 }

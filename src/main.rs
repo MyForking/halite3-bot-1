@@ -391,7 +391,6 @@ impl Commander {
         }*/
 
         for (&id, ai) in &mut self.ship_ais {
-            ai.tick(state);
             /*if state.rounds_left() < 150 && ai != &ShipAI::GoHome {
                 const GO_HOME_SAFETY_FACTOR: usize = 1;
 
@@ -408,7 +407,7 @@ impl Commander {
                 }
             }*/
 
-            /*if state.get_ship(id).position == syp && ai != &ShipAI::GoHome {
+            if state.get_ship(id).position == syp {
                 Log::log(&format!("force moving ship {:?} from spawn", id));
                 for d in Direction::get_all_cardinals() {
                     let p = syp.directional_offset(d);
@@ -420,8 +419,8 @@ impl Commander {
                     }
                 }
             } else {
-                ai.think(id, state);
-            }*/
+                ai.tick(state);
+            }
         }
 
         let enemy_blocks = state
