@@ -3,7 +3,7 @@ extern crate lazy_static;
 extern crate rand;
 
 use behavior_tree::BtNode;
-use bt_tasks::collector;
+use bt_tasks::{collector, kamikaze};
 use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
@@ -383,12 +383,12 @@ impl Commander {
 
         let syp = state.me().shipyard.position;
 
-        /*if let Some(id) = self.kamikaze {
+        if let Some(id) = self.kamikaze {
             if state.get_ship(id).position == syp {
-                *self.ship_ais.get_mut(&id).unwrap() = ShipAI::new_collector();
+                *self.ship_ais.get_mut(&id).unwrap() = collector(id);
                 self.kamikaze = None;
             }
-        }*/
+        }
 
         for (&id, ai) in &mut self.ship_ais {
             /*if state.rounds_left() < 150 && ai != &ShipAI::GoHome {
@@ -430,20 +430,20 @@ impl Commander {
             .filter(|ship| ship.owner != state.me().id)
             .any(|ship| ship.position == state.me().shipyard.position);
 
-        /*if enemy_blocks && self.kamikaze.is_none() {
+        if enemy_blocks && self.kamikaze.is_none() {
             let t = state.me().shipyard.position;
             if let Some((id, _)) = self
                 .ship_ais
                 .iter()
-                .filter(|(_, ai)| ai.is_returning_collector())
+                //.filter(|(_, ai)| ai.is_returning_collector())
                 .map(|(&id, _)| (id, state.get_ship(id).position))
                 .map(|(id, pos)| (id, (pos.x - t.x).abs() + (pos.y - t.y).abs()))
                 .min_by_key(|&(_, dist)| dist)
             {
                 self.kamikaze = Some(id);
-                *self.ship_ais.get_mut(&id).unwrap() = ShipAI::Kamikaze;
+                *self.ship_ais.get_mut(&id).unwrap() = kamikaze(id);
             }
-        }*/
+        }
 
         let want_ship = if state.game.turn_number > 100 {
             // average halite collected per ship in the last n turns
