@@ -150,7 +150,6 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
 
 fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
-
         if state.get_ship(id).is_full() {
             return BtState::Success;
         }
@@ -173,13 +172,7 @@ fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
         let mut mov = Direction::get_all_options()
             .into_iter()
             .map(|d| (d, pos.directional_offset(d)))
-            .map(|(d, p)| {
-                (
-                    state.game.map.at_position(&p).halite,
-                    d,
-                    p,
-                )
-            })
+            .map(|(d, p)| (state.game.map.at_position(&p).halite, d, p))
             .filter(|&(halite, _, p)| halite > 0)
             .filter(|&(_, _, p)| p != syp)
             .filter(|(_, _, p)| state.navi.is_safe(p))
@@ -199,19 +192,28 @@ fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
 pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
     select(vec![
         interrupt(
-            select(vec![sequence(vec![greedy(id), deliver(id)]), find_res(id), desperate(id), find_desperate(id)]),
+            select(vec![
+                sequence(vec![greedy(id), deliver(id)]),
+                find_res(id),
+                sequence(vec![desperate(id), deliver(id)]),
+                find_desperate(id),
+            ]),
             move |env| {
-                const GO_HOME_SAFETY_FACTOR: usize = 10;
+                const GO_HOME_SAFETY_FACTOR: usize = 1;
 
-                let dist = env.game.map.calculate_distance(&env.get_ship(id).position, &env.me().shipyard.position);
+                let dist = env
+                    .game
+                    .map
+                    .calculate_distance(&env.get_ship(id).position, &env.me().shipyard.position);
 
                 if env.rounds_left() * 2 > dist * 3 {
                     return false;
                 }
 
-                let path = env.get_dijkstra_path(env.get_ship(id).position, env.me().shipyard.position);
+                let path =
+                    env.get_dijkstra_path(env.get_ship(id).position, env.me().shipyard.position);
 
-                path.len() >= env.rounds_left() - /*env.me().ship_ids.len() **/ GO_HOME_SAFETY_FACTOR
+                env.rounds_left() <= path.len() + env.me().ship_ids.len() * GO_HOME_SAFETY_FACTOR
             },
         ),
         go_home(id),
