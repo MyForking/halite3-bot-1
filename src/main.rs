@@ -231,16 +231,30 @@ impl GameState {
         &self.game.ships[&id]
     }
 
-    fn move_ship(&mut self, id: ShipId, d: Direction) {
-        let p0 = self.get_ship(id).position;
-        let p1 = p0.directional_offset(d);
-        self.navi.mark_safe(&p0);
-        self.navi.mark_unsafe(&p1, id);
+    fn can_move(&self, id: ShipId) -> bool {
+        let ship = self.get_ship(id);
+        ship.halite
+            >= self.game.map.at_position(&ship.position).halite
+                / self.game.constants.move_cost_ratio
+    }
+
+    fn move_ship(&mut self, id: ShipId, mut d: Direction) {
+        if self.can_move(id) {
+            let p0 = self.get_ship(id).position;
+            let p1 = p0.directional_offset(d);
+            self.navi.mark_safe(&p0);
+            self.navi.mark_unsafe(&p1, id);
+        } else {
+            d = Direction::Still;
+        }
         let cmd = self.get_ship(id).move_ship(d);
         self.command_queue.push(cmd);
     }
 
     fn try_move_ship(&mut self, id: ShipId, d: Direction) -> bool {
+        if !self.can_move(id) {
+            return false;
+        }
         let p0 = self.get_ship(id).position;
         let p1 = p0.directional_offset(d);
         if self.navi.is_safe(&p1) {
@@ -414,10 +428,7 @@ impl Commander {
             if state.get_ship(id).position == syp {
                 Log::log(&format!("force moving ship {:?} from spawn", id));
                 for d in Direction::get_all_cardinals() {
-                    let p = syp.directional_offset(d);
-                    if state.navi.is_safe(&p) {
-                        state.navi.mark_unsafe(&p, id);
-                        state.move_ship(id, d);
+                    if state.try_move_ship(id, d) {
                         Log::log(&format!("        to {:?}", d));
                         break;
                     }

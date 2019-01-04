@@ -53,8 +53,8 @@ impl Navi {
     }
 
     pub fn mark_safe(&mut self, position: &Position) {
-        //let position = self.normalize(position);
-        //self.occupied[position.y as usize][position.x as usize] = None;
+        let position = self.normalize(position);
+        self.occupied[position.y as usize][position.x as usize] = None;
     }
 
     pub fn mark_unsafe_ship(&mut self, ship: &Ship) {
