@@ -134,15 +134,17 @@ pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
         interrupt(
             select(vec![sequence(vec![greedy(id), deliver(id)]), find_res(id)]),
             move |env| {
-                const GO_HOME_SAFETY_FACTOR: usize = 1;
+                const GO_HOME_SAFETY_FACTOR: usize = 10;
 
-                if env.rounds_left() > 150 {
+                let dist = env.game.map.calculate_distance(&env.get_ship(id).position, &env.me().shipyard.position);
+
+                if env.rounds_left() * 2 > dist * 3 {
                     return false;
                 }
 
                 let path = env.get_dijkstra_path(env.get_ship(id).position, env.me().shipyard.position);
 
-                path.len() >= env.rounds_left() - env.me().ship_ids.len() * GO_HOME_SAFETY_FACTOR
+                path.len() >= env.rounds_left() - /*env.me().ship_ids.len() **/ GO_HOME_SAFETY_FACTOR
             },
         ),
         go_home(id),
