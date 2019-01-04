@@ -192,7 +192,10 @@ where
         if (self.predicate)(env) {
             BtState::Failure
         } else {
-            self.child.tick(env)
+            match self.child.tick(env) {
+                BtState::Failure => BtState::Success,
+                s => s,
+            }
         }
     }
 }

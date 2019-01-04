@@ -66,6 +66,25 @@ fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
     })
 }
 
+fn find_desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
+    lambda(move |state: &mut GameState| {
+        let pos = state.get_ship(id).position;
+        let current_halite = state.game.map.at_position(&pos).halite;
+
+        if current_halite > 0 {
+            return BtState::Success;
+        }
+
+        match state.get_nearest_halite_move(pos, 1) {
+            Some(d) => {
+                state.move_ship(id, d);
+                BtState::Running
+            }
+            None => BtState::Failure,
+        }
+    })
+}
+
 fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
         const PREFER_STAY_FACTOR: usize = 2;
@@ -129,10 +148,58 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
     })
 }
 
+fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
+    lambda(move |state: &mut GameState| {
+
+        if state.get_ship(id).is_full() {
+            return BtState::Success;
+        }
+
+        let (pos, cargo) = {
+            let ship = state.get_ship(id);
+            (ship.position, ship.halite)
+        };
+
+        let movement_cost =
+            state.game.map.at_position(&pos).halite / state.game.constants.move_cost_ratio;
+
+        if movement_cost > 0 {
+            state.move_ship(id, Direction::Still);
+            return BtState::Running;
+        }
+
+        let syp = state.me().shipyard.position;
+
+        let mut mov = Direction::get_all_options()
+            .into_iter()
+            .map(|d| (d, pos.directional_offset(d)))
+            .map(|(d, p)| {
+                (
+                    state.game.map.at_position(&p).halite,
+                    d,
+                    p,
+                )
+            })
+            .filter(|&(halite, _, p)| halite > 0)
+            .filter(|&(_, _, p)| p != syp)
+            .filter(|(_, _, p)| state.navi.is_safe(p))
+            .max_by_key(|&(halite, _, _)| halite)
+            .map(|(_, d, _)| d);
+
+        match mov {
+            None => BtState::Failure,
+            Some(d) => {
+                state.move_ship(id, d);
+                BtState::Running
+            }
+        }
+    })
+}
+
 pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
     select(vec![
         interrupt(
-            select(vec![sequence(vec![greedy(id), deliver(id)]), find_res(id)]),
+            select(vec![sequence(vec![greedy(id), deliver(id)]), find_res(id), desperate(id), find_desperate(id)]),
             move |env| {
                 const GO_HOME_SAFETY_FACTOR: usize = 10;
 

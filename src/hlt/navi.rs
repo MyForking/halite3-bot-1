@@ -12,15 +12,10 @@ pub struct Navi {
 
 impl Navi {
     pub fn new(width: usize, height: usize) -> Navi {
-        let mut occupied: Vec<Vec<Option<ShipId>>> = Vec::with_capacity(height);
-        for _ in 0..height {
-            occupied.push(vec![None; width]);
-        }
-
         Navi {
             width,
             height,
-            occupied,
+            occupied: vec![vec![None; width]; height],
         }
     }
 
@@ -55,6 +50,11 @@ impl Navi {
     pub fn mark_unsafe(&mut self, position: &Position, ship_id: ShipId) {
         let position = self.normalize(position);
         self.occupied[position.y as usize][position.x as usize] = Some(ship_id);
+    }
+
+    pub fn mark_safe(&mut self, position: &Position) {
+        //let position = self.normalize(position);
+        //self.occupied[position.y as usize][position.x as usize] = None;
     }
 
     pub fn mark_unsafe_ship(&mut self, ship: &Ship) {

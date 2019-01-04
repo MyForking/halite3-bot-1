@@ -232,16 +232,20 @@ impl GameState {
     }
 
     fn move_ship(&mut self, id: ShipId, d: Direction) {
-        let p = self.get_ship(id).position.directional_offset(d);
-        self.navi.mark_unsafe(&p, id);
+        let p0 = self.get_ship(id).position;
+        let p1 = p0.directional_offset(d);
+        self.navi.mark_safe(&p0);
+        self.navi.mark_unsafe(&p1, id);
         let cmd = self.get_ship(id).move_ship(d);
         self.command_queue.push(cmd);
     }
 
     fn try_move_ship(&mut self, id: ShipId, d: Direction) -> bool {
-        let p = self.get_ship(id).position.directional_offset(d);
-        if self.navi.is_safe(&p) {
-            self.navi.mark_unsafe(&p, id);
+        let p0 = self.get_ship(id).position;
+        let p1 = p0.directional_offset(d);
+        if self.navi.is_safe(&p1) {
+            self.navi.mark_safe(&p0);
+            self.navi.mark_unsafe(&p1, id);
             let cmd = self.get_ship(id).move_ship(d);
             self.command_queue.push(cmd);
             true

@@ -34,6 +34,16 @@ impl Direction {
             Direction::West,
             Direction::North,
             Direction::South,
+            Direction::Still,
+        ]
+    }
+
+    pub fn get_all_options() -> Vec<Direction> {
+        vec![
+            Direction::East,
+            Direction::West,
+            Direction::North,
+            Direction::South,
         ]
     }
 
