@@ -14,11 +14,11 @@ pub enum BtState {
     Failure,
 }
 
-pub fn lambda<E, F: FnMut(&mut E) -> BtState>(mut func: F) -> Box<impl BtNode<E>> {
+pub fn lambda<E, F: FnMut(&mut E) -> BtState>(func: F) -> Box<impl BtNode<E>> {
     Box::new(Lambda::new(func))
 }
 
-pub fn condition<E, P: FnMut(&mut E) -> bool>(mut func: P) -> Box<impl BtNode<E>> {
+/*pub fn condition<E, P: FnMut(&mut E) -> bool>(mut func: P) -> Box<impl BtNode<E>> {
     lambda(move |e| {
         if func(e) {
             BtState::Success
@@ -26,7 +26,7 @@ pub fn condition<E, P: FnMut(&mut E) -> bool>(mut func: P) -> Box<impl BtNode<E>
             BtState::Failure
         }
     })
-}
+}*/
 
 pub fn sequence<E>(children: Vec<NodePtr<E>>) -> Box<impl BtNode<E>> {
     Box::new(Sequence::new(children))
@@ -36,14 +36,11 @@ pub fn select<E>(children: Vec<NodePtr<E>>) -> Box<impl BtNode<E>> {
     Box::new(Selector::new(children))
 }
 
-pub fn interrupt<E, P: FnMut(&mut E) -> bool>(
-    child: NodePtr<E>,
-    mut func: P,
-) -> Box<impl BtNode<E>> {
+pub fn interrupt<E, P: FnMut(&mut E) -> bool>(child: NodePtr<E>, func: P) -> Box<impl BtNode<E>> {
     Box::new(Interrupt::new(child, func))
 }
 
-pub fn run_or_fail<E, P: FnMut(&mut E) -> bool>(mut func: P) -> Box<impl BtNode<E>> {
+/*pub fn run_or_fail<E, P: FnMut(&mut E) -> bool>(mut func: P) -> Box<impl BtNode<E>> {
     let mut state = BtState::NotStarted;
     lambda(move |e| match state {
         BtState::Running => {
@@ -60,7 +57,7 @@ pub fn run_or_fail<E, P: FnMut(&mut E) -> bool>(mut func: P) -> Box<impl BtNode<
         }
         BtState::Failure | BtState::Success => unreachable!(),
     })
-}
+}*/
 
 struct Lambda<F, E>
 where

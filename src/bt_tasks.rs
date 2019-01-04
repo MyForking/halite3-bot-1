@@ -1,14 +1,7 @@
-use behavior_tree::{interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState};
+use behavior_tree::{interrupt, lambda, select, sequence, BtNode, BtState};
 use hlt::direction::Direction;
 use hlt::ShipId;
 use GameState;
-
-fn try_move_ship(id: ShipId, d: Direction) -> Box<impl BtNode<GameState>> {
-    run_or_fail(move |state: &mut GameState| {
-        let p = state.get_ship(id).position;
-        state.try_move_ship(id, d)
-    })
-}
 
 fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
@@ -118,7 +111,7 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
             return BtState::Running;
         }
 
-        let mut mov = Direction::get_all_cardinals()
+        let mov = Direction::get_all_cardinals()
             .into_iter()
             .map(|d| (d, pos.directional_offset(d)))
             .map(|(d, p)| {
@@ -154,10 +147,7 @@ fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
             return BtState::Success;
         }
 
-        let (pos, cargo) = {
-            let ship = state.get_ship(id);
-            (ship.position, ship.halite)
-        };
+        let pos = state.get_ship(id).position;
 
         let movement_cost =
             state.game.map.at_position(&pos).halite / state.game.constants.move_cost_ratio;
@@ -169,11 +159,11 @@ fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         let syp = state.me().shipyard.position;
 
-        let mut mov = Direction::get_all_options()
+        let mov = Direction::get_all_options()
             .into_iter()
             .map(|d| (d, pos.directional_offset(d)))
             .map(|(d, p)| (state.game.map.at_position(&p).halite, d, p))
-            .filter(|&(halite, _, p)| halite > 0)
+            .filter(|&(halite, _, _)| halite > 0)
             .filter(|&(_, _, p)| p != syp)
             .filter(|(_, _, p)| state.navi.is_safe(p))
             .max_by_key(|&(halite, _, _)| halite)

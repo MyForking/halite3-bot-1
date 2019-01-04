@@ -15,48 +15,14 @@ use hlt::ship::Ship;
 use hlt::ShipId;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
-use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
-use std::env;
+//use std::env;
 //use std::time::SystemTime;
 //use std::time::UNIX_EPOCH;
-use std::rc::Rc;
 
 mod behavior_tree;
 mod bt_tasks;
 mod hlt;
-mod movement;
-
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum ShipTask {
-    Greedy,
-    Cleaner,
-    ReturnNaive,
-    ReturnDijkstra,
-    Kamikaze,
-    GoHome,
-}
-
-impl ShipTask {
-    fn get_move(&self, state: &mut GameState, ship_id: ShipId) -> Direction {
-        match self {
-            //ShipTask::Greedy => movement::greedy(state, ship_id),
-            ShipTask::Greedy => movement::nn_collect(state, ship_id),
-            ShipTask::Cleaner => movement::cleaner(state, ship_id),
-            ShipTask::ReturnNaive => movement::return_naive(state, ship_id),
-            ShipTask::ReturnDijkstra => movement::return_dijkstra(state, ship_id),
-            ShipTask::Kamikaze => movement::kamikaze(state, ship_id),
-            ShipTask::GoHome => movement::go_home(state, ship_id),
-        }
-    }
-
-    fn is_returning(&self) -> bool {
-        match self {
-            ShipTask::ReturnNaive | ShipTask::ReturnDijkstra => true,
-            _ => false,
-        }
-    }
-}
 
 #[derive(Eq, PartialEq)]
 struct DijkstraNode<C: Ord, T: Eq> {
@@ -82,72 +48,6 @@ impl<C: Ord, T: Eq> DijkstraNode<C, T> {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum ShipAI {
-    Collector(ShipTask),
-    Cleaner(ShipTask),
-    Kamikaze,
-    GoHome,
-}
-
-impl ShipAI {
-    fn new_collector() -> Self {
-        ShipAI::Collector(ShipTask::Greedy)
-    }
-
-    fn new_cleaner() -> Self {
-        ShipAI::Cleaner(ShipTask::Cleaner)
-    }
-
-    fn think(&mut self, ship_id: ShipId, state: &mut GameState) {
-        match self {
-            ShipAI::Collector(ref mut task) => {
-                {
-                    let ship = state.get_ship(ship_id);
-                    match task {
-                        ShipTask::Greedy if ship.is_full() => *task = ShipTask::ReturnDijkstra,
-                        ShipTask::ReturnDijkstra if ship.halite == 0 => *task = ShipTask::Greedy,
-                        _ => {}
-                    }
-                }
-                let d = task.get_move(state, ship_id);
-                state.move_ship(ship_id, d);
-            }
-
-            ShipAI::Cleaner(ref mut task) => {
-                {
-                    let ship = state.get_ship(ship_id);
-                    match task {
-                        ShipTask::Cleaner if ship.is_full() => *task = ShipTask::ReturnDijkstra,
-                        ShipTask::ReturnDijkstra if ship.halite == 0 => *task = ShipTask::Cleaner,
-                        _ => {}
-                    }
-                }
-                let d = task.get_move(state, ship_id);
-                state.move_ship(ship_id, d);
-            }
-
-            ShipAI::Kamikaze => {
-                let d = ShipTask::Kamikaze.get_move(state, ship_id);
-                state.move_ship(ship_id, d);
-            }
-
-            ShipAI::GoHome => {
-                let d = ShipTask::GoHome.get_move(state, ship_id);
-                state.move_ship(ship_id, d);
-            }
-        }
-    }
-
-    fn is_returning_collector(&self) -> bool {
-        if let ShipAI::Collector(task) = self {
-            task.is_returning()
-        } else {
-            false
-        }
-    }
-}
-
 pub struct GameState {
     game: Game,
     navi: Navi,
@@ -156,12 +56,10 @@ pub struct GameState {
     last_halite: usize,
 
     halite_percentiles: [usize; 101],
-
-    collector_net: movement::CollectorNeuralNet,
 }
 
 impl GameState {
-    fn new(net: movement::CollectorNeuralNet) -> Self {
+    fn new() -> Self {
         let game = Game::new();
         let state = GameState {
             navi: Navi::new(game.map.width, game.map.height),
@@ -171,8 +69,6 @@ impl GameState {
             game,
 
             halite_percentiles: [0; 101],
-
-            collector_net: net,
         };
 
         Game::ready("MyRustBot");
@@ -385,8 +281,6 @@ impl Commander {
     }
 
     fn process_frame(&mut self, state: &mut GameState) {
-        let shipyard_pos = state.me().shipyard.position;
-
         for id in self.lost_ships.drain() {
             self.ship_ais.remove(&id);
             if self.kamikaze == Some(id) {
@@ -409,22 +303,6 @@ impl Commander {
         }
 
         for (&id, ai) in &mut self.ship_ais {
-            /*if state.rounds_left() < 150 && ai != &ShipAI::GoHome {
-                const GO_HOME_SAFETY_FACTOR: usize = 1;
-
-                let path = state.get_dijkstra_path(state.get_ship(id).position, shipyard_pos);
-
-                if path.len() >= state.rounds_left() - self.ships.len() * GO_HOME_SAFETY_FACTOR {
-                    *ai = ShipAI::GoHome;
-                }
-            }*/
-
-            /*if state.halite_percentiles[99] < 100 {
-                if let ShipAI::Collector(_) = ai {
-                    *ai = ShipAI::new_cleaner();
-                }
-            }*/
-
             if state.get_ship(id).position == syp {
                 Log::log(&format!("force moving ship {:?} from spawn", id));
                 for d in Direction::get_all_cardinals() {
@@ -485,7 +363,7 @@ impl Commander {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
+    //let args: Vec<String> = env::args().collect();
     /*let rng_seed: u64 = if args.len() > 1 {
         args[1].parse().unwrap()
     } else {
@@ -502,16 +380,16 @@ fn main() {
         seed_bytes[12], seed_bytes[13], seed_bytes[14], seed_bytes[15]
     ]);*/
 
-    let net = if args.len() > 1 {
+    /*let net = if args.len() > 1 {
         Log::log(&format!("loading network from file {}", args[1]));
         movement::CollectorNeuralNet::from_file(&args[1])
     } else {
         Log::log("using default network");
         movement::CollectorNeuralNet::new()
-    };
+    };*/
 
     let mut commander = Commander::new();
-    let mut game = GameState::new(net);
+    let mut game = GameState::new();
 
     loop {
         game.update_frame();
