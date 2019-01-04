@@ -3,7 +3,7 @@ extern crate lazy_static;
 extern crate rand;
 
 use behavior_tree::BtNode;
-use bt_tasks::{collector, kamikaze};
+use bt_tasks::{build_dropoff, collector, kamikaze};
 use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
@@ -55,6 +55,8 @@ pub struct GameState {
     collect_statistic: Vec<f64>,
     last_halite: usize,
 
+    halite_density: Vec<Vec<i32>>,
+
     halite_percentiles: [usize; 101],
 }
 
@@ -66,9 +68,12 @@ impl GameState {
             command_queue: vec![],
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
             last_halite: 5000,
-            game,
+
+            halite_density: vec![vec![0; game.map.width]; game.map.height],
 
             halite_percentiles: [0; 101],
+
+            game,
         };
 
         Game::ready("MyRustBot");
@@ -79,6 +84,8 @@ impl GameState {
     fn update_frame(&mut self) {
         self.game.update_frame();
         self.navi.update_frame(&self.game);
+
+        self.compute_halite_density();
 
         let mut map_halite: Vec<_> = self.game.map.iter().map(|cell| cell.halite).collect();
         map_halite.sort_unstable();
@@ -125,6 +132,27 @@ impl GameState {
 
     fn get_ship(&self, id: ShipId) -> &Ship {
         &self.game.ships[&id]
+    }
+
+    fn distance_to_nearest_dropoff(&self, id: ShipId) -> usize {
+        let pos = self.get_ship(id).position;
+        let mut dist = self.game.map.calculate_distance(&self.me().shipyard.position, &pos);
+
+        self.me().dropoff_ids.iter()
+            .map(|did| self.game.dropoffs[did].position)
+            .map(|p| self.game.map.calculate_distance(&p, &pos))
+            .fold(dist, |dist, d| dist.min(d))
+    }
+
+    fn try_build_dropoff(&mut self, id: ShipId) -> bool {
+        if self.me().halite < self.game.constants.dropoff_cost {
+            return false
+        }
+
+        let cmd = self.get_ship(id).make_dropoff();
+        self.command_queue.push(cmd);
+
+        true
     }
 
     fn can_move(&self, id: ShipId) -> bool {
@@ -250,6 +278,33 @@ impl GameState {
         }
         vec![]
     }
+
+    fn compute_halite_density(&mut self) {
+        let r = 5_i32;
+        let n = 2 * r * (r + 1) + 1; // number of pixels within manhatten distance of r
+
+        for (i, row) in self.halite_density.iter_mut().enumerate() {
+            for (j, d) in row.iter_mut().enumerate() {
+                *d = 0;
+                for a in -r..=r {
+                    for b in -r..=r {
+                        if a.abs() + b.abs() > r {
+                            continue;
+                        }
+                        *d += self
+                            .game
+                            .map
+                            .at_position(&Position {
+                                x: j as i32 - b,
+                                y: i as i32 - a,
+                            })
+                            .halite as i32;
+                    }
+                }
+                *d /= n
+            }
+        }
+    }
 }
 
 struct Commander {
@@ -258,6 +313,7 @@ struct Commander {
     ships: HashSet<ShipId>,
     ship_ais: HashMap<ShipId, Box<dyn BtNode<GameState>>>,
 
+    builder: Option<ShipId>,
     kamikaze: Option<ShipId>,
 }
 
@@ -268,6 +324,7 @@ impl Commander {
             lost_ships: HashSet::new(),
             ships: HashSet::new(),
             ship_ais: HashMap::new(),
+            builder: None,
             kamikaze: None,
         }
     }
@@ -286,6 +343,9 @@ impl Commander {
             if self.kamikaze == Some(id) {
                 self.kamikaze = None
             }
+            if self.builder == Some(id) {
+                self.builder = None
+            }
         }
 
         for id in self.new_ships.drain() {
@@ -299,6 +359,29 @@ impl Commander {
             if state.get_ship(id).position == syp {
                 *self.ship_ais.get_mut(&id).unwrap() = collector(id);
                 self.kamikaze = None;
+            }
+        }
+
+        let want_dropoff = state.game.turn_number > 100 && state.me().dropoff_ids.is_empty();
+
+        if want_dropoff && state.me().halite >= state.game.constants.dropoff_cost {
+            const EXPANSION_DISTANCE: usize = 10;
+            const MIN_EXPANSION_DENSITY: i32 = 100;
+
+            let id = self.ships.iter()
+                .filter(|&&id| state.distance_to_nearest_dropoff(id) >= EXPANSION_DISTANCE)
+                .map(|&id| {
+                    let p = state.get_ship(id).position;
+                    (id, state.halite_density[p.y as usize][p.x as usize])
+                })
+                .filter(|&(_, density)| density >= MIN_EXPANSION_DENSITY)
+                .max_by_key(|&(_, density)| density)
+                .map(|(id, _)| id);
+
+            self.builder = id;
+
+            if let Some(id) = id {
+                *self.ship_ais.get_mut(&id).unwrap() = build_dropoff(id);
             }
         }
 
@@ -338,7 +421,7 @@ impl Commander {
             }
         }
 
-        let want_ship = if state.game.turn_number > 100 {
+        let mut want_ship = if state.game.turn_number > 100 {
             // average halite collected per ship in the last n turns
             let avg_collected = state.collect_statistic[state.game.turn_number - 100..]
                 .iter()
@@ -351,6 +434,22 @@ impl Commander {
         } else {
             true
         };
+
+        want_ship &= !want_dropoff || state.me().halite >= state.game.constants.dropoff_cost + state.game.constants.ship_cost;
+
+        /*match (want_dropoff, self.builder) {
+            (Some(target_pos), None) => {
+                let id = self.ships.iter()
+                    .map(|&id| (state.game.map.calculate_distance(&target_pos, &state.get_ship(id).position), id))
+                    .min_by_key(|(d, _)| *d)
+                    .map(|(_, id)| id);
+                self.builder = id;
+                if let Some(id) = id {
+                    *self.ship_ais.get_mut(&id).unwrap() = builder(id, target_pos);
+                }
+            }
+            _ => {}
+        }*/
 
         if enemy_blocks && state.me().halite >= state.game.constants.ship_cost
             || (want_ship && state.navi.is_safe(&state.me().shipyard.position))

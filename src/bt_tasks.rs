@@ -1,5 +1,6 @@
-use behavior_tree::{interrupt, lambda, select, sequence, BtNode, BtState};
+use behavior_tree::{interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState};
 use hlt::direction::Direction;
+use hlt::position::Position;
 use hlt::ShipId;
 use GameState;
 
@@ -33,6 +34,21 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
         } else {
             state.move_ship_or_wait(id, d);
         }
+
+        BtState::Running
+    })
+}
+
+fn go_to(id: ShipId, dest: Position) -> Box<impl BtNode<GameState>> {
+    lambda(move |state: &mut GameState| {
+        if state.get_ship(id).position == dest {
+            return BtState::Success;
+        }
+
+        let pos = state.get_ship(id).position;
+        let path = state.get_dijkstra_path(pos, dest);
+        let d = path.first().cloned().unwrap_or(Direction::Still);
+        state.move_ship_or_wait(id, d);
 
         BtState::Running
     })
@@ -176,6 +192,12 @@ fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
                 BtState::Running
             }
         }
+    })
+}
+
+pub fn build_dropoff(id: ShipId) -> Box<impl BtNode<GameState>> {
+    run_or_fail(move |state: &mut GameState| {
+        state.try_build_dropoff(id)
     })
 }
 

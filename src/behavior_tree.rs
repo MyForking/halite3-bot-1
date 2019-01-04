@@ -40,7 +40,7 @@ pub fn interrupt<E, P: FnMut(&mut E) -> bool>(child: NodePtr<E>, func: P) -> Box
     Box::new(Interrupt::new(child, func))
 }
 
-/*pub fn run_or_fail<E, P: FnMut(&mut E) -> bool>(mut func: P) -> Box<impl BtNode<E>> {
+pub fn run_or_fail<E, P: FnMut(&mut E) -> bool>(mut func: P) -> Box<impl BtNode<E>> {
     let mut state = BtState::NotStarted;
     lambda(move |e| match state {
         BtState::Running => {
@@ -57,7 +57,7 @@ pub fn interrupt<E, P: FnMut(&mut E) -> bool>(child: NodePtr<E>, func: P) -> Box
         }
         BtState::Failure | BtState::Success => unreachable!(),
     })
-}*/
+}
 
 struct Lambda<F, E>
 where
