@@ -1,6 +1,5 @@
 use behavior_tree::{interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState};
 use hlt::direction::Direction;
-use hlt::position::Position;
 use hlt::ShipId;
 use GameState;
 use rand::{thread_rng, Rng};
@@ -51,7 +50,7 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
     })
 }
 
-fn go_to(id: ShipId, dest: Position) -> Box<impl BtNode<GameState>> {
+/*fn go_to(id: ShipId, dest: Position) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
         if state.get_ship(id).position == dest {
             return BtState::Success;
@@ -64,7 +63,7 @@ fn go_to(id: ShipId, dest: Position) -> Box<impl BtNode<GameState>> {
 
         BtState::Running
     })
-}
+}*/
 
 fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
@@ -236,19 +235,8 @@ pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
             move |env| {
                 const GO_HOME_SAFETY_FACTOR: usize = 1;
 
-                let dist = env
-                    .game
-                    .map
-                    .calculate_distance(&env.get_ship(id).position, &env.me().shipyard.position);
-
-                if env.rounds_left() * 2 > dist * 3 {
-                    return false;
-                }
-
-                let path =
-                    env.get_dijkstra_path(env.get_ship(id).position, env.me().shipyard.position);
-
-                env.rounds_left() <= path.len() + env.me().ship_ids.len() * GO_HOME_SAFETY_FACTOR
+                let dist = env.get_return_distance(env.get_ship(id).position);
+                env.rounds_left() <= dist + (env.me().ship_ids.len() * GO_HOME_SAFETY_FACTOR) / (1 + env.me().dropoff_ids.len())
             },
         ),
         go_home(id),
