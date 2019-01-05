@@ -510,9 +510,9 @@ impl Commander {
         let want_dropoff = state.avg_return_length >= EXPANSION_DISTANCE as f64;
 
         if want_dropoff && state.me().halite >= state.game.constants.dropoff_cost {
-            const MIN_EXPANSION_DENSITY: i32 = 100;
-            const SHIP_RADIUS: usize = 10;
-            const N_SHIPS: usize = 5;
+            const MIN_EXPANSION_DENSITY: i32 = 150;
+            const SHIP_RADIUS: usize = 12;
+            const N_SHIPS: usize = 10;
 
             let id = self
                 .ships
