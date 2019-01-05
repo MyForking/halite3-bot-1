@@ -24,7 +24,7 @@ mod behavior_tree;
 mod bt_tasks;
 mod hlt;
 
-#[derive(Debug, Eq, PartialEq)]
+/*#[derive(Debug, Eq, PartialEq)]
 struct DijkstraMaxNode<C: Ord, T: Eq> {
     cost: C,
     data: T,
@@ -46,7 +46,7 @@ impl<C: Ord, T: Eq> DijkstraMaxNode<C, T> {
     fn new(cost: C, data: T) -> Self {
         DijkstraMaxNode { cost, data }
     }
-}
+}*/
 
 #[derive(Debug, Eq, PartialEq)]
 struct DijkstraMinNode<C: Ord, T: Eq> {
@@ -288,7 +288,7 @@ impl GameState {
         None
     }
 
-    fn get_dijkstra_path(&self, start: Position, dest: Position) -> Vec<Direction> {
+    /*fn get_dijkstra_path(&self, start: Position, dest: Position) -> Vec<Direction> {
         const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
 
         let mut visited = HashSet::new();
@@ -336,7 +336,7 @@ impl GameState {
             }
         }
         vec![]
-    }
+    }*/
 
     fn get_return_dir(&self, pos: Position) -> Direction {
         self.return_map_directions[pos.y as usize][pos.x as usize]
@@ -351,6 +351,18 @@ impl GameState {
             .min_by_key(|(_, p)| self.return_cumultive_costs[p.y as usize][p.x as usize])
             .unwrap()
             .0
+    }
+
+    fn get_return_distance(&self, mut pos: Position) -> usize {
+        let mut dist = 0;
+        loop {
+            pos = self.game.map.normalize(&pos);
+            match self.return_map_directions[pos.y as usize][pos.x as usize] {
+                Direction::Still => return dist,
+                d => pos = pos.directional_offset(d),
+            }
+            dist += 1;
+        }
     }
 
     fn compute_return_map(&mut self) {
