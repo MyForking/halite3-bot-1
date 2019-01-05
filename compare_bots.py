@@ -16,7 +16,7 @@ def run_game(bot1, bot2, s):
 if __name__ == '__main__':
 
     bot1 = './target/release/my_bot'
-    bot2 = './old_bots/v11'
+    bot2 = './old_bots/v12'
 
     bot1, bot2 = bot1, bot2
 
