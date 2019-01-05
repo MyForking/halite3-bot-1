@@ -1,7 +1,7 @@
 use hlt::direction::Direction;
 use hlt::ShipId;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Command(pub String);
 
 impl Command {

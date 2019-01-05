@@ -171,6 +171,10 @@ impl GameState {
         &self.game.ships[&id]
     }
 
+    fn get_ship_mut(&mut self, id: ShipId) -> &mut Ship {
+        self.game.ships.get_mut(&id).unwrap()
+    }
+
     fn distance_to_nearest_dropoff(&self, id: ShipId) -> usize {
         let pos = self.get_ship(id).position;
         let dist = self.game.map.calculate_distance(&self.me().shipyard.position, &pos);
@@ -191,8 +195,7 @@ impl GameState {
             return false
         }
 
-        let cmd = self.get_ship(id).make_dropoff();
-        self.command_queue.push(cmd);
+        self.get_ship_mut(id).make_dropoff();
 
         self.avg_return_length = 0.0;
 
@@ -217,8 +220,7 @@ impl GameState {
         } else {
             d = Direction::Still;
         }
-        let cmd = self.get_ship(id).move_ship(d);
-        self.command_queue.push(cmd);
+        self.get_ship_mut(id).move_ship(d);
     }
 
     fn try_move_ship(&mut self, id: ShipId, d: Direction) -> bool {
@@ -230,8 +232,7 @@ impl GameState {
         if self.navi.is_safe(&p1) {
             self.navi.mark_safe(&p0);
             self.navi.mark_unsafe(&p1, id);
-            let cmd = self.get_ship(id).move_ship(d);
-            self.command_queue.push(cmd);
+            self.get_ship_mut(id).move_ship(d);
             true
         } else {
             false
@@ -240,8 +241,7 @@ impl GameState {
 
     fn move_ship_or_wait(&mut self, id: ShipId, d: Direction) {
         if !self.try_move_ship(id, d) {
-            let cmd = Command::move_ship(id, Direction::Still);
-            self.command_queue.push(cmd);
+            //self.get_ship_mut(id).move_ship(Direction::Still);
         }
     }
 
@@ -371,10 +371,6 @@ impl GameState {
         }
     }
 
-    /*todo:
-        1. compute inverse dijkstra for whole map, to arrive at nearest dropoff/shipyard
-        2. try use this map for all return tasks*/
-
     fn compute_halite_density(&mut self) {
         let r = 5_i32;
         let n = 2 * r * (r + 1) + 1; // number of pixels within manhatten distance of r
@@ -400,6 +396,21 @@ impl GameState {
                 *d /= n
             }
         }
+    }
+
+    fn push(&mut self, pos: Position) {
+        let id = if let Some(id) = self.my_ships().find(|&id| self.get_ship(id).position == pos) {
+            id
+        } else { return };
+
+        Log::log(&format!("pushing {:?}", pos));
+
+        if Direction::get_all_cardinals().into_iter().any(|d| self.try_move_ship(id, d)) {
+            return
+        }
+
+        self.push(pos.directional_offset(Direction::West));
+        self.try_move_ship(id, Direction::West);
     }
 }
 
@@ -484,16 +495,26 @@ impl Commander {
             }
         }
 
+
+        state.push(syp);
+
         for (&id, ai) in &mut self.ship_ais {
             if state.get_ship(id).position == syp {
-                Log::log(&format!("force moving ship {:?} from spawn", id));
+                //Log::log(&format!("force moving ship {:?} from spawn", id));
+                /*let mut success = false;
                 for d in Direction::get_all_cardinals() {
                     if state.try_move_ship(id, d) {
                         Log::log(&format!("        to {:?}", d));
+                        success = true;
                         break;
                     }
                 }
-            } else {
+                if !success {
+                    Log::log(&format!("pushing hard...", id));
+
+                }*/
+            }
+            if state.get_ship(id).command.is_none() {
                 ai.tick(state);
             }
         }
@@ -557,6 +578,9 @@ impl Commander {
             let cmd = state.me().shipyard.spawn();
             state.command_queue.push(cmd);
         }
+
+        let cmds = state.my_ships().filter_map(|id| state.get_ship(id).command.clone()).collect::<Vec<_>>();
+        state.command_queue.extend(cmds);
     }
 }
 
