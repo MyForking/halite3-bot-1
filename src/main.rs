@@ -24,27 +24,51 @@ mod behavior_tree;
 mod bt_tasks;
 mod hlt;
 
-#[derive(Eq, PartialEq)]
-struct DijkstraNode<C: Ord, T: Eq> {
+#[derive(Debug, Eq, PartialEq)]
+struct DijkstraMaxNode<C: Ord, T: Eq> {
     cost: C,
     data: T,
 }
 
-impl<C: Ord, T: Eq> std::cmp::PartialOrd for DijkstraNode<C, T> {
+impl<C: Ord, T: Eq> std::cmp::PartialOrd for DijkstraMaxNode<C, T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.cost.partial_cmp(&other.cost)
     }
 }
 
-impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraNode<C, T> {
+impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraMaxNode<C, T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.cost.cmp(&other.cost)
     }
 }
 
-impl<C: Ord, T: Eq> DijkstraNode<C, T> {
+impl<C: Ord, T: Eq> DijkstraMaxNode<C, T> {
     fn new(cost: C, data: T) -> Self {
-        DijkstraNode { cost, data }
+        DijkstraMaxNode { cost, data }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct DijkstraMinNode<C: Ord, T: Eq> {
+    cost: C,
+    data: T,
+}
+
+impl<C: Ord, T: Eq> std::cmp::PartialOrd for DijkstraMinNode<C, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        other.cost.partial_cmp(&self.cost)
+    }
+}
+
+impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraMinNode<C, T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.cost.cmp(&self.cost)
+    }
+}
+
+impl<C: Ord, T: Eq> DijkstraMinNode<C, T> {
+    fn new(cost: C, data: T) -> Self {
+        DijkstraMinNode { cost, data }
     }
 }
 
@@ -56,8 +80,11 @@ pub struct GameState {
     last_halite: usize,
 
     halite_density: Vec<Vec<i32>>,
+    return_map_directions: Vec<Vec<Direction>>,
+    return_cumultive_costs: Vec<Vec<usize>>,
 
     halite_percentiles: [usize; 101],
+    avg_return_length: f64,
 }
 
 impl GameState {
@@ -70,8 +97,11 @@ impl GameState {
             last_halite: 5000,
 
             halite_density: vec![vec![0; game.map.width]; game.map.height],
+            return_map_directions: vec![vec![Direction::Still; game.map.width]; game.map.height],
+            return_cumultive_costs: vec![vec![0; game.map.width]; game.map.height],
 
             halite_percentiles: [0; 101],
+            avg_return_length: 0.0,
 
             game,
         };
@@ -86,6 +116,7 @@ impl GameState {
         self.navi.update_frame(&self.game);
 
         self.compute_halite_density();
+        self.compute_return_map();
 
         let mut map_halite: Vec<_> = self.game.map.iter().map(|cell| cell.halite).collect();
         map_halite.sort_unstable();
@@ -118,6 +149,12 @@ impl GameState {
         }
     }
 
+    fn notify_return(&mut self, turns_taken: usize) {
+        const UPDATE_RATE: f64 = 0.9;
+        self.avg_return_length = self.avg_return_length * UPDATE_RATE + turns_taken as f64 * (1.0 - UPDATE_RATE);
+        Log::log(&format!("Average return length: {}", self.avg_return_length));
+    }
+
     fn rounds_left(&self) -> usize {
         self.game.constants.max_turns - self.game.turn_number
     }
@@ -136,12 +173,17 @@ impl GameState {
 
     fn distance_to_nearest_dropoff(&self, id: ShipId) -> usize {
         let pos = self.get_ship(id).position;
-        let mut dist = self.game.map.calculate_distance(&self.me().shipyard.position, &pos);
+        let dist = self.game.map.calculate_distance(&self.me().shipyard.position, &pos);
 
         self.me().dropoff_ids.iter()
             .map(|did| self.game.dropoffs[did].position)
             .map(|p| self.game.map.calculate_distance(&p, &pos))
             .fold(dist, |dist, d| dist.min(d))
+    }
+
+    fn ships_in_range<'a>(&'a self, pos: Position, r: usize) -> impl Iterator<Item=ShipId> + 'a {
+        self.my_ships()
+            .filter(move |&id| self.game.map.calculate_distance(&pos, &self.get_ship(id).position) <= r)
     }
 
     fn try_build_dropoff(&mut self, id: ShipId) -> bool {
@@ -152,14 +194,18 @@ impl GameState {
         let cmd = self.get_ship(id).make_dropoff();
         self.command_queue.push(cmd);
 
+        self.avg_return_length = 0.0;
+
         true
+    }
+
+    fn movement_cost(&self, pos: &Position) -> usize {
+        self.game.map.at_position(&pos).halite  / self.game.constants.move_cost_ratio
     }
 
     fn can_move(&self, id: ShipId) -> bool {
         let ship = self.get_ship(id);
-        ship.halite
-            >= self.game.map.at_position(&ship.position).halite
-                / self.game.constants.move_cost_ratio
+        ship.halite >= self.movement_cost(&ship.position)
     }
 
     fn move_ship(&mut self, id: ShipId, mut d: Direction) {
@@ -235,7 +281,7 @@ impl GameState {
         let mut visited = HashSet::new();
 
         let mut queue = BinaryHeap::new();
-        queue.push(DijkstraNode::new(0, (start, vec![])));
+        queue.push(DijkstraMaxNode::new(0, (start, vec![])));
 
         let maxlen = ((start.x - dest.x).abs() + (start.y - dest.y).abs()).max(5) * 2; // todo: tweak me
 
@@ -270,7 +316,7 @@ impl GameState {
                 }
                 let mut newpath = path.clone();
                 newpath.push(d);
-                queue.push(DijkstraNode::new(
+                queue.push(DijkstraMaxNode::new(
                     node.cost as i64 - movement_cost as i64 - STEP_COST,
                     (p, newpath),
                 ));
@@ -278,6 +324,56 @@ impl GameState {
         }
         vec![]
     }
+
+    fn get_return_dir(&self, pos: Position) -> Direction {
+        self.return_map_directions[pos.y as usize][pos.x as usize]
+    }
+
+    fn get_return_dir_alternative(&self, pos: Position) -> Direction {
+        let original = self.get_return_dir(pos);
+        Direction::get_all_cardinals().iter()
+            .filter(|&&d| d != original)
+            .map(|&d| (d, self.game.map.normalize(&pos.directional_offset(d))))
+            .min_by_key(|(_, p)| self.return_cumultive_costs[p.y as usize][p.x as usize])
+            .unwrap().0
+    }
+
+    fn compute_return_map(&mut self) {
+        const STEP_COST: usize = 1; // fixed cost of one step - tweak to prefer shorter paths
+
+        for cc in self.return_cumultive_costs.iter_mut().flat_map(|row| row.iter_mut()) {
+            *cc = usize::max_value();
+        }
+
+        let mut queue = BinaryHeap::new();
+        queue.push(DijkstraMinNode::new(0, (self.me().shipyard.position, Direction::Still)));
+        for id in &self.me().dropoff_ids {
+            queue.push(DijkstraMinNode::new(0, (self.game.dropoffs[id].position, Direction::Still)));
+        }
+
+        while let Some(node) = queue.pop() {
+            let (mut pos, dir) = node.data;
+            pos = self.game.map.normalize(&pos);
+            let (i, j) = (pos.y as usize, pos.x as usize);
+
+            if node.cost >= self.return_cumultive_costs[i][j] {continue}
+
+            self.return_cumultive_costs[i][j] = node.cost;
+            self.return_map_directions[i][j] = dir;
+
+            for d in Direction::get_all_cardinals() {
+                // make sure we leave an exit open
+                if dir == Direction::Still && d == Direction::East {continue}
+                let p = pos.directional_offset(d.invert_direction());
+                let c = node.cost + self.movement_cost(&p) + STEP_COST;
+                queue.push(DijkstraMinNode::new(c, (p, d)));
+            }
+        }
+    }
+
+    /*todo:
+        1. compute inverse dijkstra for whole map, to arrive at nearest dropoff/shipyard
+        2. try use this map for all return tasks*/
 
     fn compute_halite_density(&mut self) {
         let r = 5_i32;
@@ -362,14 +458,17 @@ impl Commander {
             }
         }
 
-        let want_dropoff = state.game.turn_number > 100 && state.me().dropoff_ids.is_empty();
+        const EXPANSION_DISTANCE: usize = 20;
+        let want_dropoff = state.avg_return_length >= EXPANSION_DISTANCE as f64;
 
         if want_dropoff && state.me().halite >= state.game.constants.dropoff_cost {
-            const EXPANSION_DISTANCE: usize = 10;
             const MIN_EXPANSION_DENSITY: i32 = 100;
+            const SHIP_RADIUS: usize = 10;
+            const N_SHIPS: usize = 5;
 
             let id = self.ships.iter()
                 .filter(|&&id| state.distance_to_nearest_dropoff(id) >= EXPANSION_DISTANCE)
+                .filter(|&&id| state.ships_in_range(state.get_ship(id).position, SHIP_RADIUS).count() >= N_SHIPS)
                 .map(|&id| {
                     let p = state.get_ship(id).position;
                     (id, state.halite_density[p.y as usize][p.x as usize])

@@ -5,16 +5,24 @@ use hlt::ShipId;
 use GameState;
 
 fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
+    let mut turns_taken = 0;
     lambda(move |state: &mut GameState| {
         if state.get_ship(id).halite <= 0 {
+            state.notify_return(turns_taken);
             return BtState::Success;
         }
 
         let pos = state.get_ship(id).position;
-        let dest = state.me().shipyard.position;
-        let path = state.get_dijkstra_path(pos, dest);
-        let d = path.first().cloned().unwrap_or(Direction::Still);
-        state.move_ship_or_wait(id, d);
+        //let dest = state.me().shipyard.position;
+        //let path = state.get_dijkstra_path(pos, dest);
+        //let d = path.first().cloned().unwrap_or(Direction::Still);
+        let d = state.get_return_dir(pos);
+        if !state.try_move_ship(id, d) {
+            let d = state.get_return_dir_alternative(pos);
+            state.move_ship_or_wait(id, d);
+        }
+
+        turns_taken += 1;
 
         BtState::Running
     })
@@ -23,16 +31,19 @@ fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
 fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
         let pos = state.get_ship(id).position;
-        let dest = state.me().shipyard.position;
-        let path = state.get_dijkstra_path(pos, dest);
-
-        let d = path.first().cloned().unwrap_or(Direction::Still);
+        //let dest = state.me().shipyard.position;
+        //let path = state.get_dijkstra_path(pos, dest);
+        //let d = path.first().cloned().unwrap_or(Direction::Still);
+        let d = state.get_return_dir(pos);
         let p = pos.directional_offset(d);
 
-        if p == dest {
+        if state.game.map.at_position(&p).structure.is_some() {
             state.move_ship(id, d);
         } else {
-            state.move_ship_or_wait(id, d);
+            if !state.try_move_ship(id, d) {
+                let d = state.get_return_dir_alternative(pos);
+                state.move_ship_or_wait(id, d);
+            }
         }
 
         BtState::Running
