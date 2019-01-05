@@ -151,8 +151,12 @@ impl GameState {
 
     fn notify_return(&mut self, turns_taken: usize) {
         const UPDATE_RATE: f64 = 0.9;
-        self.avg_return_length = self.avg_return_length * UPDATE_RATE + turns_taken as f64 * (1.0 - UPDATE_RATE);
-        Log::log(&format!("Average return length: {}", self.avg_return_length));
+        self.avg_return_length =
+            self.avg_return_length * UPDATE_RATE + turns_taken as f64 * (1.0 - UPDATE_RATE);
+        Log::log(&format!(
+            "Average return length: {}",
+            self.avg_return_length
+        ));
     }
 
     fn rounds_left(&self) -> usize {
@@ -177,22 +181,31 @@ impl GameState {
 
     fn distance_to_nearest_dropoff(&self, id: ShipId) -> usize {
         let pos = self.get_ship(id).position;
-        let dist = self.game.map.calculate_distance(&self.me().shipyard.position, &pos);
+        let dist = self
+            .game
+            .map
+            .calculate_distance(&self.me().shipyard.position, &pos);
 
-        self.me().dropoff_ids.iter()
+        self.me()
+            .dropoff_ids
+            .iter()
             .map(|did| self.game.dropoffs[did].position)
             .map(|p| self.game.map.calculate_distance(&p, &pos))
             .fold(dist, |dist, d| dist.min(d))
     }
 
-    fn ships_in_range<'a>(&'a self, pos: Position, r: usize) -> impl Iterator<Item=ShipId> + 'a {
-        self.my_ships()
-            .filter(move |&id| self.game.map.calculate_distance(&pos, &self.get_ship(id).position) <= r)
+    fn ships_in_range<'a>(&'a self, pos: Position, r: usize) -> impl Iterator<Item = ShipId> + 'a {
+        self.my_ships().filter(move |&id| {
+            self.game
+                .map
+                .calculate_distance(&pos, &self.get_ship(id).position)
+                <= r
+        })
     }
 
     fn try_build_dropoff(&mut self, id: ShipId) -> bool {
         if self.me().halite < self.game.constants.dropoff_cost {
-            return false
+            return false;
         }
 
         self.get_ship_mut(id).make_dropoff();
@@ -203,7 +216,7 @@ impl GameState {
     }
 
     fn movement_cost(&self, pos: &Position) -> usize {
-        self.game.map.at_position(&pos).halite  / self.game.constants.move_cost_ratio
+        self.game.map.at_position(&pos).halite / self.game.constants.move_cost_ratio
     }
 
     fn can_move(&self, id: ShipId) -> bool {
@@ -331,24 +344,36 @@ impl GameState {
 
     fn get_return_dir_alternative(&self, pos: Position) -> Direction {
         let original = self.get_return_dir(pos);
-        Direction::get_all_cardinals().iter()
+        Direction::get_all_cardinals()
+            .iter()
             .filter(|&&d| d != original)
             .map(|&d| (d, self.game.map.normalize(&pos.directional_offset(d))))
             .min_by_key(|(_, p)| self.return_cumultive_costs[p.y as usize][p.x as usize])
-            .unwrap().0
+            .unwrap()
+            .0
     }
 
     fn compute_return_map(&mut self) {
         const STEP_COST: usize = 1; // fixed cost of one step - tweak to prefer shorter paths
 
-        for cc in self.return_cumultive_costs.iter_mut().flat_map(|row| row.iter_mut()) {
+        for cc in self
+            .return_cumultive_costs
+            .iter_mut()
+            .flat_map(|row| row.iter_mut())
+        {
             *cc = usize::max_value();
         }
 
         let mut queue = BinaryHeap::new();
-        queue.push(DijkstraMinNode::new(0, (self.me().shipyard.position, Direction::Still)));
+        queue.push(DijkstraMinNode::new(
+            0,
+            (self.me().shipyard.position, Direction::Still),
+        ));
         for id in &self.me().dropoff_ids {
-            queue.push(DijkstraMinNode::new(0, (self.game.dropoffs[id].position, Direction::Still)));
+            queue.push(DijkstraMinNode::new(
+                0,
+                (self.game.dropoffs[id].position, Direction::Still),
+            ));
         }
 
         while let Some(node) = queue.pop() {
@@ -356,14 +381,18 @@ impl GameState {
             pos = self.game.map.normalize(&pos);
             let (i, j) = (pos.y as usize, pos.x as usize);
 
-            if node.cost >= self.return_cumultive_costs[i][j] {continue}
+            if node.cost >= self.return_cumultive_costs[i][j] {
+                continue;
+            }
 
             self.return_cumultive_costs[i][j] = node.cost;
             self.return_map_directions[i][j] = dir;
 
             for d in Direction::get_all_cardinals() {
                 // make sure we leave an exit open
-                if dir == Direction::Still && d == Direction::East {continue}
+                if dir == Direction::Still && d == Direction::East {
+                    continue;
+                }
                 let p = pos.directional_offset(d.invert_direction());
                 let c = node.cost + self.movement_cost(&p) + STEP_COST;
                 queue.push(DijkstraMinNode::new(c, (p, d)));
@@ -399,14 +428,22 @@ impl GameState {
     }
 
     fn push(&mut self, pos: Position) {
-        let id = if let Some(id) = self.my_ships().find(|&id| self.get_ship(id).position == pos) {
+        let id = if let Some(id) = self
+            .my_ships()
+            .find(|&id| self.get_ship(id).position == pos)
+        {
             id
-        } else { return };
+        } else {
+            return;
+        };
 
         Log::log(&format!("pushing {:?}", pos));
 
-        if Direction::get_all_cardinals().into_iter().any(|d| self.try_move_ship(id, d)) {
-            return
+        if Direction::get_all_cardinals()
+            .into_iter()
+            .any(|d| self.try_move_ship(id, d))
+        {
+            return;
         }
 
         self.push(pos.directional_offset(Direction::West));
@@ -477,9 +514,16 @@ impl Commander {
             const SHIP_RADIUS: usize = 10;
             const N_SHIPS: usize = 5;
 
-            let id = self.ships.iter()
+            let id = self
+                .ships
+                .iter()
                 .filter(|&&id| state.distance_to_nearest_dropoff(id) >= EXPANSION_DISTANCE)
-                .filter(|&&id| state.ships_in_range(state.get_ship(id).position, SHIP_RADIUS).count() >= N_SHIPS)
+                .filter(|&&id| {
+                    state
+                        .ships_in_range(state.get_ship(id).position, SHIP_RADIUS)
+                        .count()
+                        >= N_SHIPS
+                })
                 .map(|&id| {
                     let p = state.get_ship(id).position;
                     (id, state.halite_density[p.y as usize][p.x as usize])
@@ -503,21 +547,6 @@ impl Commander {
         }
 
         for (&id, ai) in &mut self.ship_ais {
-            if state.get_ship(id).position == syp {
-                //Log::log(&format!("force moving ship {:?} from spawn", id));
-                /*let mut success = false;
-                for d in Direction::get_all_cardinals() {
-                    if state.try_move_ship(id, d) {
-                        Log::log(&format!("        to {:?}", d));
-                        success = true;
-                        break;
-                    }
-                }
-                if !success {
-                    Log::log(&format!("pushing hard...", id));
-
-                }*/
-            }
             if state.get_ship(id).command.is_none() {
                 ai.tick(state);
             }
@@ -559,21 +588,9 @@ impl Commander {
             true
         };
 
-        want_ship &= !want_dropoff || state.me().halite >= state.game.constants.dropoff_cost + state.game.constants.ship_cost;
-
-        /*match (want_dropoff, self.builder) {
-            (Some(target_pos), None) => {
-                let id = self.ships.iter()
-                    .map(|&id| (state.game.map.calculate_distance(&target_pos, &state.get_ship(id).position), id))
-                    .min_by_key(|(d, _)| *d)
-                    .map(|(_, id)| id);
-                self.builder = id;
-                if let Some(id) = id {
-                    *self.ship_ais.get_mut(&id).unwrap() = builder(id, target_pos);
-                }
-            }
-            _ => {}
-        }*/
+        want_ship &= !want_dropoff
+            || state.me().halite
+                >= state.game.constants.dropoff_cost + state.game.constants.ship_cost;
 
         if enemy_blocks && state.me().halite >= state.game.constants.ship_cost
             || (want_ship && state.navi.is_safe(&state.me().shipyard.position))
@@ -583,7 +600,10 @@ impl Commander {
             state.command_queue.push(cmd);
         }
 
-        let cmds = state.my_ships().filter_map(|id| state.get_ship(id).command.clone()).collect::<Vec<_>>();
+        let cmds = state
+            .my_ships()
+            .filter_map(|id| state.get_ship(id).command.clone())
+            .collect::<Vec<_>>();
         state.command_queue.extend(cmds);
     }
 }

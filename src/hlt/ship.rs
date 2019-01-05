@@ -34,7 +34,10 @@ impl Ship {
     }
 
     pub fn is_moving(&mut self) -> bool {
-        self.command.as_ref().map(|cmd| cmd.0.starts_with('m')).unwrap_or(false)
+        self.command
+            .as_ref()
+            .map(|cmd| cmd.0.starts_with('m'))
+            .unwrap_or(false)
     }
 
     pub fn generate(input: &mut Input, player_id: PlayerId, max_halite: usize) -> Ship {

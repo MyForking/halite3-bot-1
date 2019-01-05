@@ -207,9 +207,7 @@ fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
 }
 
 pub fn build_dropoff(id: ShipId) -> Box<impl BtNode<GameState>> {
-    run_or_fail(move |state: &mut GameState| {
-        state.try_build_dropoff(id)
-    })
+    run_or_fail(move |state: &mut GameState| state.try_build_dropoff(id))
 }
 
 pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
