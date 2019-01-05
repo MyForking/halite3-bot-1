@@ -222,7 +222,7 @@ pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
                 const GO_HOME_SAFETY_FACTOR: usize = 1;
 
                 let dist = env.get_return_distance(env.get_ship(id).position);
-                env.rounds_left() <= dist + env.me().ship_ids.len() * GO_HOME_SAFETY_FACTOR
+                env.rounds_left() <= dist + (env.me().ship_ids.len() * GO_HOME_SAFETY_FACTOR) / (1 + env.me().dropoff_ids.len())
             },
         ),
         go_home(id),
