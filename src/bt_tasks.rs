@@ -3,6 +3,7 @@ use hlt::direction::Direction;
 use hlt::position::Position;
 use hlt::ShipId;
 use GameState;
+use rand::{thread_rng, Rng};
 
 fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
     let mut turns_taken = 0;
@@ -76,13 +77,24 @@ fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
             return BtState::Success;
         }
 
-        match state.get_nearest_halite_move(pos, SEEK_LIMIT) {
+        let d = Direction::get_all_options().into_iter()
+            .map(|d| (d, state.game.map.normalize(&pos.directional_offset(d))))
+            .filter(|(_, p)| state.navi.is_safe(p) || *p == pos)
+            .max_by_key(|(_, p)| (state.get_pheromone(*p) * 1000.0) as i32)
+            .map(|(d, _)| d)
+            .unwrap_or(Direction::Still);
+
+        state.move_ship(id, d);
+
+        BtState::Running
+
+        /*match state.get_nearest_halite_move(pos, SEEK_LIMIT) {
             Some(d) => {
                 state.move_ship(id, d);
                 BtState::Running
             }
             None => BtState::Failure,
-        }
+        }*/
     })
 }
 
@@ -110,6 +122,7 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         const PREFER_STAY_FACTOR: usize = 2;
         const HARVEST_LIMIT: usize = 10;
         const SEEK_LIMIT: usize = 50;
+        const PHEROMONE_WEIGHT: f64 = 1.0;
 
         if state.get_ship(id).is_full() {
             return BtState::Success;
@@ -153,6 +166,7 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
             .filter(|&(_, _, _, p)| p != syp)
             .filter(|&(_, value, _, _)| value > movement_cost + current_value * PREFER_STAY_FACTOR)
             .filter(|(_, _, _, p)| state.navi.is_safe(p))
+            .map(|(halite, value, d, p)| (halite, value + (state.get_pheromone(p) * PHEROMONE_WEIGHT) as usize, d, p))
             .max_by_key(|&(_, value, _, _)| value)
             .map(|(_, _, d, p)| (d, p));
 

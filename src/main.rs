@@ -79,6 +79,9 @@ pub struct GameState {
     collect_statistic: Vec<f64>,
     last_halite: usize,
 
+    pheromones: Vec<Vec<f64>>,
+    pheromones_backbuffer: Vec<Vec<f64>>,
+
     halite_density: Vec<Vec<i32>>,
     return_map_directions: Vec<Vec<Direction>>,
     return_cumultive_costs: Vec<Vec<usize>>,
@@ -95,6 +98,9 @@ impl GameState {
             command_queue: vec![],
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
             last_halite: 5000,
+
+            pheromones: vec![vec![0.0; game.map.width]; game.map.height],
+            pheromones_backbuffer: vec![vec![0.0; game.map.width]; game.map.height],
 
             halite_density: vec![vec![0; game.map.width]; game.map.height],
             return_map_directions: vec![vec![Direction::Still; game.map.width]; game.map.height],
@@ -117,6 +123,8 @@ impl GameState {
 
         self.compute_halite_density();
         self.compute_return_map();
+
+        self.update_pheromones();
 
         let mut map_halite: Vec<_> = self.game.map.iter().map(|cell| cell.halite).collect();
         map_halite.sort_unstable();
@@ -448,6 +456,49 @@ impl GameState {
 
         self.push(pos.directional_offset(Direction::West));
         self.try_move_ship(id, Direction::West);
+    }
+
+    fn update_pheromones(&mut self) {
+        const EVAPORATION_RATE: f64 = 0.99;
+        const DIFFUSION_RATE: f64 = 0.2;  // 0..0.2 - make it higher and it will get unstable
+
+        let w = self.game.map.width;
+        let h = self.game.map.height;
+
+        for i in 0..h {
+            for j in 0..w {
+                self.pheromones_backbuffer[i][j] = (self.game.map.cells[i][j].halite as f64 + self.pheromones[i][j]) * EVAPORATION_RATE;
+            }
+        }
+
+        for i in 0..h {
+            for j in 0..w {
+                let dy = (self.pheromones[(i + 1) % h][j] - self.pheromones[i][j]) * DIFFUSION_RATE;
+                let dx = (self.pheromones[i][(j + 1) % w] - self.pheromones[i][j]) * DIFFUSION_RATE;
+
+                self.pheromones_backbuffer[(i + 1) % h][j] -= dy;
+                self.pheromones_backbuffer[i][(j + 1) % w] -= dx;
+
+                self.pheromones_backbuffer[i][j] += dx + dy;
+            }
+        }
+
+        std::mem::swap(&mut self.pheromones, &mut self.pheromones_backbuffer);
+    }
+
+    fn get_pheromone(&self, pos: Position) -> f64 {
+        let pos = self.game.map.normalize(&pos);
+        let (i, j) = (pos.y as usize, pos.x as usize);
+        self.pheromones[i][j]
+    }
+
+    fn get_pheromone_gradient(&self, pos: Position) -> (f64, f64) {
+        let w = self.game.map.width;
+        let h = self.game.map.height;
+        let (i, j) = (pos.y as usize, pos.x as usize);
+        let dx = self.pheromones[i][(j + 1) % w] - self.pheromones[i][j];
+        let dy = self.pheromones[(i + 1) % h][j] - self.pheromones[i][j];
+        (dx, dy)
     }
 }
 
