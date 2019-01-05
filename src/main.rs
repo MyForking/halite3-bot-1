@@ -495,6 +495,14 @@ impl GameState {
             }
         }
 
+        // ships absorb pheromones to avoid balling up
+        for id in self.me().ship_ids.clone().into_iter() {
+            let pos = self.get_ship(id).position;
+            let cap = self.get_ship(id).capacity();
+            let (i, j) = (pos.y as usize, pos.x as usize);
+            self.pheromones_backbuffer[i][j] = (self.pheromones_backbuffer[i][j] - cap as f64).max(0.0);
+        }
+
         std::mem::swap(&mut self.pheromones, &mut self.pheromones_backbuffer);
     }
 

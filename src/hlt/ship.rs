@@ -20,6 +20,9 @@ impl Ship {
     pub fn is_full(&self) -> bool {
         self.halite >= self.max_halite
     }
+    pub fn capacity(&self) -> usize {
+        self.max_halite - self.halite
+    }
 
     pub fn make_dropoff(&mut self) {
         self.command = Some(Command::transform_ship_into_dropoff_site(self.id));
