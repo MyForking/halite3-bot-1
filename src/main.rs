@@ -495,8 +495,12 @@ impl Commander {
             }
         }
 
-
         state.push(syp);
+
+        for id in state.me().dropoff_ids.clone() {
+            let pos = state.game.dropoffs[&id].position;
+            state.push(pos);
+        }
 
         for (&id, ai) in &mut self.ship_ais {
             if state.get_ship(id).position == syp {
