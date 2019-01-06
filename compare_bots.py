@@ -16,7 +16,7 @@ def run_game(bot1, bot2, s):
 if __name__ == '__main__':
 
     bot1 = './target/release/my_bot'
-    bot2 = './old_bots/v12'
+    bot2 = './old_bots/v1git sta'
 
     bot1, bot2 = bot1, bot2
 
@@ -34,6 +34,7 @@ if __name__ == '__main__':
     print(np.mean(scores, axis=0))
     print(np.std(scores, axis=0))
 
+    print(np.median(scores[:, 0] - scores[:, 1]))
     print(np.mean(scores[:, 0] - scores[:, 1]))
     print(np.std(scores[:, 0] - scores[:, 1]))
 
