@@ -8,6 +8,7 @@ use hlt::PlayerId;
 use hlt::ShipId;
 use std::collections::HashMap;
 
+#[derive(Serialize)]
 pub struct Player {
     pub id: PlayerId,
     pub shipyard: Shipyard,

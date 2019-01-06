@@ -20,6 +20,7 @@ use hlt::ShipId;
 //use rand::XorShiftRng;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::env;
+use std::io::prelude::*;
 //use std::time::SystemTime;
 //use std::time::UNIX_EPOCH;
 
@@ -76,11 +77,19 @@ impl<C: Ord, T: Eq> DijkstraMinNode<C, T> {
     }
 }
 
+#[derive(Serialize)]
 pub struct GameState {
+    #[serde(skip)]
     config: config::Config,
+
     game: Game,
+
+    #[serde(skip)]
     navi: Navi,
+
+    #[serde(skip)]
     command_queue: Vec<Command>,
+
     collect_statistic: Vec<f64>,
     last_halite: usize,
 
@@ -91,7 +100,7 @@ pub struct GameState {
     return_map_directions: Vec<Vec<Direction>>,
     return_cumultive_costs: Vec<Vec<usize>>,
 
-    halite_percentiles: [usize; 101],
+    halite_percentiles: Vec<usize>,
     avg_return_length: f64,
 }
 
@@ -112,7 +121,7 @@ impl GameState {
             return_map_directions: vec![vec![Direction::Still; game.map.width]; game.map.height],
             return_cumultive_costs: vec![vec![0; game.map.width]; game.map.height],
 
-            halite_percentiles: [0; 101],
+            halite_percentiles: vec![0; 101],
             avg_return_length: 0.0,
 
             game,
@@ -153,13 +162,19 @@ impl GameState {
         self.command_queue.clear();
     }
 
-    fn finalize_frame(&mut self, _runid: &str) {
+    fn finalize_frame(&mut self, _runid: &str, dumpfile: Option<&str>) {
         //Log::log(&format!("issuing commands: {:?}", command_queue));
 
         /*if self.game.turn_number == self.game.constants.max_turns - 5 {
             Log::log("dumping neural net");
             self.collector_net.dump(&format!("netdump{}-{}.txt", runid, self.game.my_id.0));
         }*/
+
+        if let Some(file) = dumpfile {
+            let mut file = std::fs::OpenOptions::new().create(true).append(true).open(file).unwrap();
+            file.write_all(serde_json::to_string_pretty(self).unwrap().as_bytes()).unwrap();
+            file.write_all(b"\n===\n").unwrap();
+        }
 
         Game::end_turn(&self.command_queue);
 
@@ -681,7 +696,6 @@ impl Commander {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
     /*let rng_seed: u64 = if args.len() > 1 {
         args[1].parse().unwrap()
     } else {
@@ -706,19 +720,21 @@ fn main() {
         movement::CollectorNeuralNet::new()
     };*/
 
-    let cfg_file = if args.len() > 1 {
-        args[1].clone()
-    } else {
-        "config.json".to_string()
-    };
+    let mut cfg_file = "config.json".to_string();
+    let mut dump_file = None;
+    let mut runid = String::new();
+
+    let mut args = env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_ref() {
+            "-c" | "--config" => cfg_file = args.next().unwrap(),
+            "-d" | "--dump" => dump_file = args.next(),
+            "-r" | "--runid" => runid = args.next().unwrap(),
+            _ => panic!("Invalid argument: {}", arg),
+        }
+    }
 
     Log::log(&format!("using config file: {}", cfg_file));
-
-    let runid = if args.len() > 2 {
-        &args[2]
-    } else {
-        ""
-    };
 
     let mut commander = Commander::new();
     let mut game = GameState::new(&cfg_file);
@@ -730,6 +746,6 @@ fn main() {
 
         commander.process_frame(&mut game);
 
-        game.finalize_frame(runid);
+        game.finalize_frame(&runid, dump_file.as_ref().map(String::as_ref));
     }
 }

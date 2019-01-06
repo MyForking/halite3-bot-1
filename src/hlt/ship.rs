@@ -7,12 +7,15 @@ use hlt::PlayerId;
 use hlt::ShipId;
 
 #[derive(Clone)]
+#[derive(Serialize)]
 pub struct Ship {
     pub owner: PlayerId,
     pub id: ShipId,
     pub position: Position,
     pub halite: usize,
     max_halite: usize,
+
+    #[serde(skip)]
     pub command: Option<Command>,
 }
 

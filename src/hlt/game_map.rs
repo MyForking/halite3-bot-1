@@ -5,6 +5,7 @@ use hlt::map_cell::Structure;
 use hlt::position::Position;
 use std::cmp::min;
 
+#[derive(Serialize)]
 pub struct GameMap {
     pub width: usize,
     pub height: usize,

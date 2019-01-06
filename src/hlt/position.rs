@@ -1,6 +1,7 @@
 use hlt::direction::Direction;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize)]
 pub struct Position {
     pub x: i32,
     pub y: i32,

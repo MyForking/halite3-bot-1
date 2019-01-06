@@ -12,7 +12,9 @@ use hlt::PlayerId;
 use hlt::ShipId;
 use std::collections::HashMap;
 
+#[derive(Serialize)]
 pub struct Game {
+    #[serde(skip)]
     pub constants: Constants,
     pub turn_number: usize,
     pub my_id: PlayerId,
@@ -20,6 +22,8 @@ pub struct Game {
     pub ships: HashMap<ShipId, Ship>,
     pub dropoffs: HashMap<DropoffId, Dropoff>,
     pub map: GameMap,
+
+    #[serde(skip)]
     input: Input,
 }
 

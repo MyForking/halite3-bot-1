@@ -31,10 +31,13 @@ pub mod shipyard;
 mod input;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize)]
 pub struct PlayerId(pub usize);
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize)]
 pub struct DropoffId(pub usize);
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Serialize)]
 pub struct ShipId(pub usize);
