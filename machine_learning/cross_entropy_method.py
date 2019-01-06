@@ -141,19 +141,18 @@ n_output = 5
 mu_w1 = np.zeros((n_hidden, n_input + 1))
 mu_w2 = np.zeros((n_output, n_hidden + 1))
 
-var_w1 = np.ones_like(mu_w1) * 1000
-var_w2 = np.ones_like(mu_w2) * 1000
+var_w1 = np.ones_like(mu_w1) * 10000
+var_w2 = np.ones_like(mu_w2) * 10000
 
 mean_s = []
 
-batch = 0
-counter = 8
-upda = 0
-noup = 0
-for it in range(10000):
+#mapdata_backup = mapdata0.copy()
+for it in range(100000):
     #mapdata = get_map()
     #width, height = mapdata.shape
     #mapdata0 = np.tile(mapdata, [3, 3])
+    
+    mapdata0 = (mapdata_backup * np.random.rand()).astype(int)
     
     pos = np.random.randint(width, 2*width, 2)
     
@@ -172,9 +171,9 @@ for it in range(10000):
     var_w1 = var_w1 * (1-LEARNING_RATE) + LEARNING_RATE * np.var(all_w1[i], axis=0)
     var_w2 = var_w2 * (1-LEARNING_RATE) + LEARNING_RATE * np.var(all_w2[i], axis=0)
     
-    mean_s.append(np.mean(s))
+    mean_s.append(np.mean(s) / np.mean(mapdata0))
         
-    if it % 1000 == 999:
+    if it % 10000 == 9999:
         plt.plot(mean_s)
         plt.show()
         
