@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate lazy_static;
-extern crate rand;
+//extern crate rand;
+extern crate serde;
+extern crate serde_json;
+#[macro_use] extern crate serde_derive;
 
 use behavior_tree::BtNode;
 use bt_tasks::{build_dropoff, collector, kamikaze};
@@ -16,12 +19,13 @@ use hlt::ShipId;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
-//use std::env;
+use std::env;
 //use std::time::SystemTime;
 //use std::time::UNIX_EPOCH;
 
 mod behavior_tree;
 mod bt_tasks;
+mod config;
 mod hlt;
 
 /*#[derive(Debug, Eq, PartialEq)]
@@ -73,6 +77,7 @@ impl<C: Ord, T: Eq> DijkstraMinNode<C, T> {
 }
 
 pub struct GameState {
+    config: config::Config,
     game: Game,
     navi: Navi,
     command_queue: Vec<Command>,
@@ -91,9 +96,10 @@ pub struct GameState {
 }
 
 impl GameState {
-    fn new() -> Self {
+    fn new(cfg_file: &str) -> Self {
         let game = Game::new();
         let state = GameState {
+            config: config::Config::from_file(cfg_file),
             navi: Navi::new(game.map.width, game.map.height),
             command_queue: vec![],
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
@@ -374,8 +380,6 @@ impl GameState {
     }
 
     fn compute_return_map(&mut self) {
-        const STEP_COST: usize = 1; // fixed cost of one step - tweak to prefer shorter paths
-
         for cc in self
             .return_cumultive_costs
             .iter_mut()
@@ -414,7 +418,7 @@ impl GameState {
                     continue;
                 }
                 let p = pos.directional_offset(d.invert_direction());
-                let c = node.cost + self.movement_cost(&p) + STEP_COST;
+                let c = node.cost + self.movement_cost(&p) + self.config.navigation.return_step_cost;
                 queue.push(DijkstraMinNode::new(c, (p, d)));
             }
         }
@@ -471,22 +475,19 @@ impl GameState {
     }
 
     fn update_pheromones(&mut self) {
-        const EVAPORATION_RATE: f64 = 0.99;
-        const DIFFUSION_RATE: f64 = 0.2;  // 0..0.2 - make it higher and it will get unstable
-
         let w = self.game.map.width;
         let h = self.game.map.height;
 
         for i in 0..h {
             for j in 0..w {
-                self.pheromones_backbuffer[i][j] = (self.game.map.cells[i][j].halite as f64 + self.pheromones[i][j]) * EVAPORATION_RATE;
+                self.pheromones_backbuffer[i][j] = (self.game.map.cells[i][j].halite as f64 + self.pheromones[i][j]) * self.config.pheromones.evaporation_rate;
             }
         }
 
         for i in 0..h {
             for j in 0..w {
-                let dy = (self.pheromones[(i + 1) % h][j] - self.pheromones[i][j]) * DIFFUSION_RATE;
-                let dx = (self.pheromones[i][(j + 1) % w] - self.pheromones[i][j]) * DIFFUSION_RATE;
+                let dy = (self.pheromones[(i + 1) % h][j] - self.pheromones[i][j]) * self.config.pheromones.diffusion_rate;
+                let dx = (self.pheromones[i][(j + 1) % w] - self.pheromones[i][j]) * self.config.pheromones.diffusion_rate;
 
                 self.pheromones_backbuffer[(i + 1) % h][j] -= dy;
                 self.pheromones_backbuffer[i][(j + 1) % w] -= dx;
@@ -574,29 +575,25 @@ impl Commander {
             }
         }
 
-        const EXPANSION_DISTANCE: usize = 20;
-        let want_dropoff = state.avg_return_length >= EXPANSION_DISTANCE as f64;
+        let want_dropoff = state.avg_return_length >= state.config.expansion.expansion_distance as f64;
 
         if want_dropoff && state.me().halite >= state.game.constants.dropoff_cost {
-            const MIN_EXPANSION_DENSITY: i32 = 150;
-            const SHIP_RADIUS: usize = 12;
-            const N_SHIPS: usize = 10;
 
             let id = self
                 .ships
                 .iter()
-                .filter(|&&id| state.distance_to_nearest_dropoff(id) >= EXPANSION_DISTANCE)
+                .filter(|&&id| state.distance_to_nearest_dropoff(id) >= state.config.expansion.expansion_distance)
                 .filter(|&&id| {
                     state
-                        .ships_in_range(state.get_ship(id).position, SHIP_RADIUS)
+                        .ships_in_range(state.get_ship(id).position, state.config.expansion.ship_radius)
                         .count()
-                        >= N_SHIPS
+                        >= state.config.expansion.n_ships
                 })
                 .map(|&id| {
                     let p = state.get_ship(id).position;
                     (id, state.halite_density[p.y as usize][p.x as usize])
                 })
-                .filter(|&(_, density)| density >= MIN_EXPANSION_DENSITY)
+                .filter(|&(_, density)| density >= state.config.expansion.min_halite_density)
                 .max_by_key(|&(_, density)| density)
                 .map(|(id, _)| id);
 
@@ -644,10 +641,10 @@ impl Commander {
 
         let mut want_ship = if state.game.turn_number > 100 {
             // average halite collected per ship in the last n turns
-            let avg_collected = state.collect_statistic[state.game.turn_number - 100..]
+            let avg_collected = state.collect_statistic[state.game.turn_number - state.config.statistics.halite_collection_window ..]
                 .iter()
                 .sum::<f64>()
-                / 100.0;
+                / state.config.statistics.halite_collection_window as f64;
 
             let predicted_profit = avg_collected * state.rounds_left() as f64;
 
@@ -677,7 +674,7 @@ impl Commander {
 }
 
 fn main() {
-    //let args: Vec<String> = env::args().collect();
+    let args: Vec<String> = env::args().collect();
     /*let rng_seed: u64 = if args.len() > 1 {
         args[1].parse().unwrap()
     } else {
@@ -702,8 +699,16 @@ fn main() {
         movement::CollectorNeuralNet::new()
     };*/
 
+    let cfg_file = if args.len() > 1 {
+        args[1].clone()
+    } else {
+        "config.json".to_string()
+    };
+
+    Log::log(&format!("using config file: {}", cfg_file));
+
     let mut commander = Commander::new();
-    let mut game = GameState::new();
+    let mut game = GameState::new(&cfg_file);
 
     loop {
         game.update_frame();

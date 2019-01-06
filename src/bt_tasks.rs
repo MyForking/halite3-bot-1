@@ -69,12 +69,10 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
 
 fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
-        const SEEK_LIMIT: usize = 50;
-
         let pos = state.get_ship(id).position;
         let current_halite = state.game.map.at_position(&pos).halite;
 
-        if current_halite >= SEEK_LIMIT {
+        if current_halite >= state.config.ships.greedy_seek_limit {
             return BtState::Success;
         }
 
@@ -120,11 +118,6 @@ fn find_desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
 
 fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
-        const PREFER_STAY_FACTOR: usize = 2;
-        const HARVEST_LIMIT: usize = 10;
-        const SEEK_LIMIT: usize = 50;
-        const PHEROMONE_WEIGHT: f64 = 1.0;
-
         if state.get_ship(id).is_full() {
             return BtState::Success;
         }
@@ -147,7 +140,7 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         let current_halite = state.game.map.at_position(&pos).halite;
         let current_value = current_halite / state.game.constants.extract_ratio;
 
-        if current_halite >= SEEK_LIMIT {
+        if current_halite >= state.config.ships.greedy_seek_limit {
             state.move_ship(id, Direction::Still);
             return BtState::Running;
         }
@@ -163,15 +156,15 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
                     p,
                 )
             })
-            .filter(|&(halite, _, _, _)| halite >= HARVEST_LIMIT)
+            .filter(|&(halite, _, _, _)| halite >= state.config.ships.greedy_harvest_limit)
             .filter(|&(_, _, _, p)| p != syp)
-            .filter(|&(_, value, _, _)| value > movement_cost + current_value * PREFER_STAY_FACTOR)
+            .filter(|&(_, value, _, _)| value > movement_cost + current_value * state.config.ships.greedy_prefer_stay_factor)
             .filter(|(_, _, _, p)| state.navi.is_safe(p))
-            .map(|(halite, value, d, p)| (halite, value + (state.get_pheromone(p) * PHEROMONE_WEIGHT) as usize, d, p))
+            .map(|(halite, value, d, p)| (halite, value + (state.get_pheromone(p) * state.config.ships.greedy_pheromone_weight) as usize, d, p))
             .max_by_key(|&(_, value, _, _)| value)
             .map(|(_, _, d, p)| (d, p));
 
-        if mov.is_none() && current_halite < SEEK_LIMIT {
+        if mov.is_none() && current_halite < state.config.ships.greedy_seek_limit {
             return BtState::Failure;
         }
 
@@ -235,10 +228,8 @@ pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
                 find_desperate(id),
             ]),
             move |env| {
-                const GO_HOME_SAFETY_FACTOR: usize = 1;
-
                 let dist = env.get_return_distance(env.get_ship(id).position);
-                env.rounds_left() <= dist + (env.me().ship_ids.len() * GO_HOME_SAFETY_FACTOR) / (1 + env.me().dropoff_ids.len())
+                env.rounds_left() <= dist + (env.me().ship_ids.len() * env.config.navigation.go_home_safety_factor) / (1 + env.me().dropoff_ids.len())
             },
         ),
         go_home(id),
