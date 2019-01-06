@@ -30,14 +30,11 @@ pub mod shipyard;
 #[allow(dead_code)]
 mod input;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-#[derive(Serialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct PlayerId(pub usize);
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-#[derive(Serialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct DropoffId(pub usize);
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-#[derive(Serialize)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct ShipId(pub usize);

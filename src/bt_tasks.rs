@@ -76,7 +76,8 @@ fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
             return BtState::Success;
         }
 
-        let d = Direction::get_all_options().into_iter()
+        let d = Direction::get_all_options()
+            .into_iter()
             .map(|d| (d, state.game.map.normalize(&pos.directional_offset(d))))
             .filter(|(_, p)| state.navi.is_safe(p) || *p == pos)
             .max_by_key(|(_, p)| (state.get_pheromone(*p) * 1000.0) as i32)
@@ -156,14 +157,26 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
                 )
             })
             .filter(|&(_, _, p)| p != syp)
-            .filter(|&(value, _, _)| value > movement_cost + current_value * state.config.ships.greedy_prefer_stay_factor)
+            .filter(|&(value, _, _)| {
+                value > movement_cost + current_value * state.config.ships.greedy_prefer_stay_factor
+            })
             .filter(|(_, _, p)| state.navi.is_safe(p))
-            .map(|(value, d, p)| (value + (state.get_pheromone(p) * state.config.ships.greedy_pheromone_weight) as usize, d, p))
+            .map(|(value, d, p)| {
+                (
+                    value
+                        + (state.get_pheromone(p) * state.config.ships.greedy_pheromone_weight)
+                            as usize,
+                    d,
+                    p,
+                )
+            })
             .max_by_key(|&(value, _, _)| value)
             .map(|(_, d, _)| d);
 
         let d = match mov {
-            None if current_halite < state.config.ships.greedy_seek_limit => return BtState::Failure,
+            None if current_halite < state.config.ships.greedy_seek_limit => {
+                return BtState::Failure
+            }
             None => Direction::Still,
             Some(d) => d,
         };
@@ -213,7 +226,10 @@ fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
 }
 
 pub fn build_dropoff(id: ShipId) -> Box<impl BtNode<GameState>> {
-    run_or_fail(move |state: &mut GameState| state.try_build_dropoff(id))
+    sequence(vec![
+        // todo: move a few steps up the density gradient
+        run_or_fail(move |state: &mut GameState| state.try_build_dropoff(id)),
+    ])
 }
 
 pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
@@ -227,7 +243,10 @@ pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
             ]),
             move |env| {
                 let dist = env.get_return_distance(env.get_ship(id).position);
-                env.rounds_left() <= dist + (env.me().ship_ids.len() * env.config.navigation.go_home_safety_factor) / (1 + env.me().dropoff_ids.len())
+                env.rounds_left()
+                    <= dist
+                        + (env.me().ship_ids.len() * env.config.navigation.go_home_safety_factor)
+                            / (1 + env.me().dropoff_ids.len())
             },
         ),
         go_home(id),

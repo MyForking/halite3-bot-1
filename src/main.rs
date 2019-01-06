@@ -3,7 +3,8 @@ extern crate lazy_static;
 //extern crate rand;
 extern crate serde;
 extern crate serde_json;
-#[macro_use] extern crate serde_derive;
+#[macro_use]
+extern crate serde_derive;
 
 use behavior_tree::BtNode;
 use bt_tasks::{build_dropoff, collector, kamikaze};
@@ -171,8 +172,13 @@ impl GameState {
         }*/
 
         if let Some(file) = dumpfile {
-            let mut file = std::fs::OpenOptions::new().create(true).append(true).open(file).unwrap();
-            file.write_all(serde_json::to_string_pretty(self).unwrap().as_bytes()).unwrap();
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(file)
+                .unwrap();
+            file.write_all(serde_json::to_string_pretty(self).unwrap().as_bytes())
+                .unwrap();
             file.write_all(b"\n===\n").unwrap();
         }
 
@@ -438,7 +444,8 @@ impl GameState {
                     continue;
                 }
                 let p = pos.directional_offset(d.invert_direction());
-                let c = node.cost + self.movement_cost(&p) + self.config.navigation.return_step_cost;
+                let c =
+                    node.cost + self.movement_cost(&p) + self.config.navigation.return_step_cost;
                 queue.push(DijkstraMinNode::new(c, (p, d)));
             }
         }
@@ -500,14 +507,18 @@ impl GameState {
 
         for i in 0..h {
             for j in 0..w {
-                self.pheromones_backbuffer[i][j] = (self.game.map.cells[i][j].halite as f64 + self.pheromones[i][j]) * self.config.pheromones.evaporation_rate;
+                self.pheromones_backbuffer[i][j] = (self.game.map.cells[i][j].halite as f64
+                    + self.pheromones[i][j])
+                    * self.config.pheromones.evaporation_rate;
             }
         }
 
         for i in 0..h {
             for j in 0..w {
-                let dy = (self.pheromones[(i + 1) % h][j] - self.pheromones[i][j]) * self.config.pheromones.diffusion_rate;
-                let dx = (self.pheromones[i][(j + 1) % w] - self.pheromones[i][j]) * self.config.pheromones.diffusion_rate;
+                let dy = (self.pheromones[(i + 1) % h][j] - self.pheromones[i][j])
+                    * self.config.pheromones.diffusion_rate;
+                let dx = (self.pheromones[i][(j + 1) % w] - self.pheromones[i][j])
+                    * self.config.pheromones.diffusion_rate;
 
                 self.pheromones_backbuffer[(i + 1) % h][j] -= dy;
                 self.pheromones_backbuffer[i][(j + 1) % w] -= dx;
@@ -521,7 +532,8 @@ impl GameState {
             let pos = self.get_ship(id).position;
             let cap = self.get_ship(id).capacity();
             let (i, j) = (pos.y as usize, pos.x as usize);
-            self.pheromones_backbuffer[i][j] = (self.pheromones_backbuffer[i][j] - cap as f64).max(0.0);
+            self.pheromones_backbuffer[i][j] =
+                (self.pheromones_backbuffer[i][j] - cap as f64).max(0.0);
         }
 
         std::mem::swap(&mut self.pheromones, &mut self.pheromones_backbuffer);
@@ -597,17 +609,23 @@ impl Commander {
             }
         }
 
-        let want_dropoff = state.avg_return_length >= state.config.expansion.expansion_distance as f64;
+        let want_dropoff =
+            state.avg_return_length >= state.config.expansion.expansion_distance as f64;
 
         if want_dropoff && state.me().halite >= state.game.constants.dropoff_cost {
-
             let id = self
                 .ships
                 .iter()
-                .filter(|&&id| state.distance_to_nearest_dropoff(id) >= state.config.expansion.expansion_distance)
+                .filter(|&&id| {
+                    state.distance_to_nearest_dropoff(id)
+                        >= state.config.expansion.expansion_distance
+                })
                 .filter(|&&id| {
                     state
-                        .ships_in_range(state.get_ship(id).position, state.config.expansion.ship_radius)
+                        .ships_in_range(
+                            state.get_ship(id).position,
+                            state.config.expansion.ship_radius,
+                        )
                         .count()
                         >= state.config.expansion.n_ships
                 })
@@ -663,7 +681,8 @@ impl Commander {
 
         let mut want_ship = if state.game.turn_number > 100 {
             // average halite collected per ship in the last n turns
-            let avg_collected = state.collect_statistic[state.game.turn_number - state.config.statistics.halite_collection_window ..]
+            let avg_collected = state.collect_statistic
+                [state.game.turn_number - state.config.statistics.halite_collection_window..]
                 .iter()
                 .sum::<f64>()
                 / state.config.statistics.halite_collection_window as f64;

@@ -1,7 +1,6 @@
-
 use serde_json;
-use std::io::BufReader;
 use std::fs::File;
+use std::io::BufReader;
 
 #[derive(Deserialize)]
 pub struct Config {

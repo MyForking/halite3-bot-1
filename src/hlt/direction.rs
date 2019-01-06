@@ -1,5 +1,4 @@
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-#[derive(Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize)]
 pub enum Direction {
     North,
     East,

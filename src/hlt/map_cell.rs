@@ -10,8 +10,7 @@ pub struct MapCell {
     pub structure: Structure,
 }
 
-#[derive(Eq, PartialEq)]
-#[derive(Serialize)]
+#[derive(Eq, PartialEq, Serialize)]
 pub enum Structure {
     None,
     Dropoff(DropoffId),
