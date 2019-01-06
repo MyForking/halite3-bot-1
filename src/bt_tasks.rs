@@ -140,7 +140,7 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         let current_halite = state.game.map.at_position(&pos).halite;
         let current_value = current_halite / state.game.constants.extract_ratio;
 
-        if current_halite >= state.config.ships.greedy_seek_limit {
+        if current_halite >= state.config.ships.greedy_harvest_limit {
             state.move_ship(id, Direction::Still);
             return BtState::Running;
         }
@@ -150,25 +150,23 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
             .map(|d| (d, pos.directional_offset(d)))
             .map(|(d, p)| {
                 (
-                    state.game.map.at_position(&p).halite,
                     state.game.map.at_position(&p).halite / state.game.constants.extract_ratio,
                     d,
                     p,
                 )
             })
-            .filter(|&(halite, _, _, _)| halite >= state.config.ships.greedy_harvest_limit)
-            .filter(|&(_, _, _, p)| p != syp)
-            .filter(|&(_, value, _, _)| value > movement_cost + current_value * state.config.ships.greedy_prefer_stay_factor)
-            .filter(|(_, _, _, p)| state.navi.is_safe(p))
-            .map(|(halite, value, d, p)| (halite, value + (state.get_pheromone(p) * state.config.ships.greedy_pheromone_weight) as usize, d, p))
-            .max_by_key(|&(_, value, _, _)| value)
-            .map(|(_, _, d, p)| (d, p));
+            .filter(|&(_, _, p)| p != syp)
+            .filter(|&(value, _, _)| value > movement_cost + current_value * state.config.ships.greedy_prefer_stay_factor)
+            .filter(|(_, _, p)| state.navi.is_safe(p))
+            .map(|(value, d, p)| (value + (state.get_pheromone(p) * state.config.ships.greedy_pheromone_weight) as usize, d, p))
+            .max_by_key(|&(value, _, _)| value)
+            .map(|(_, d, _)| d);
 
-        if mov.is_none() && current_halite < state.config.ships.greedy_seek_limit {
-            return BtState::Failure;
-        }
-
-        let (d, _) = mov.unwrap_or((Direction::Still, pos));
+        let d = match mov {
+            None if current_halite < state.config.ships.greedy_seek_limit => return BtState::Failure,
+            None => Direction::Still,
+            Some(d) => d,
+        };
 
         state.move_ship(id, d);
 
