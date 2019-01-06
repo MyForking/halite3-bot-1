@@ -30,8 +30,4 @@ impl Position {
             self.directional_offset(Direction::West),
         ]
     }
-
-    pub fn distance(&self, other: &Self) -> i32 {
-        (self.x - other.x).abs() + (self.y - other.y).abs()
-    }
 }

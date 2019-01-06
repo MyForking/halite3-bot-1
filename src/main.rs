@@ -1,7 +1,12 @@
 #[macro_use]
 extern crate lazy_static;
-extern crate rand;
+//extern crate rand;
+extern crate serde;
+extern crate serde_json;
+#[macro_use] extern crate serde_derive;
 
+use behavior_tree::BtNode;
+use bt_tasks::{build_dropoff, collector, kamikaze};
 use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
@@ -13,162 +18,104 @@ use hlt::ship::Ship;
 use hlt::ShipId;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
-use std::cell::RefCell;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::env;
 //use std::time::SystemTime;
 //use std::time::UNIX_EPOCH;
-use std::rc::Rc;
 
+mod behavior_tree;
+mod bt_tasks;
+mod config;
 mod hlt;
-mod movement;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum ShipTask {
-    Greedy,
-    Cleaner,
-    ReturnNaive,
-    ReturnDijkstra,
-    Kamikaze,
-    GoHome,
-}
-
-impl ShipTask {
-    fn get_move(&self, state: &mut GameState, ship_id: ShipId) -> Direction {
-        match self {
-            //ShipTask::Greedy => movement::greedy(state, ship_id),
-            ShipTask::Greedy => movement::nn_collect(state, ship_id),
-            ShipTask::Cleaner => movement::cleaner(state, ship_id),
-            ShipTask::ReturnNaive => movement::return_naive(state, ship_id),
-            ShipTask::ReturnDijkstra => movement::return_dijkstra(state, ship_id),
-            ShipTask::Kamikaze => movement::kamikaze(state, ship_id),
-            ShipTask::GoHome => movement::go_home(state, ship_id),
-        }
-    }
-
-    fn is_returning(&self) -> bool {
-        match self {
-            ShipTask::ReturnNaive | ShipTask::ReturnDijkstra => true,
-            _ => false,
-        }
-    }
-}
-
-#[derive(Eq, PartialEq)]
-struct DijkstraNode<C: Ord, T: Eq> {
+/*#[derive(Debug, Eq, PartialEq)]
+struct DijkstraMaxNode<C: Ord, T: Eq> {
     cost: C,
     data: T,
 }
 
-impl<C: Ord, T: Eq> std::cmp::PartialOrd for DijkstraNode<C, T> {
+impl<C: Ord, T: Eq> std::cmp::PartialOrd for DijkstraMaxNode<C, T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.cost.partial_cmp(&other.cost)
     }
 }
 
-impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraNode<C, T> {
+impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraMaxNode<C, T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.cost.cmp(&other.cost)
     }
 }
 
-impl<C: Ord, T: Eq> DijkstraNode<C, T> {
+impl<C: Ord, T: Eq> DijkstraMaxNode<C, T> {
     fn new(cost: C, data: T) -> Self {
-        DijkstraNode { cost, data }
+        DijkstraMaxNode { cost, data }
+    }
+}*/
+
+#[derive(Debug, Eq, PartialEq)]
+struct DijkstraMinNode<C: Ord, T: Eq> {
+    cost: C,
+    data: T,
+}
+
+impl<C: Ord, T: Eq> std::cmp::PartialOrd for DijkstraMinNode<C, T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        other.cost.partial_cmp(&self.cost)
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-enum ShipAI {
-    Collector(ShipTask),
-    Cleaner(ShipTask),
-    Kamikaze,
-    GoHome,
+impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraMinNode<C, T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other.cost.cmp(&self.cost)
+    }
 }
 
-impl ShipAI {
-    fn new_collector() -> Self {
-        ShipAI::Collector(ShipTask::Greedy)
-    }
-
-    fn new_cleaner() -> Self {
-        ShipAI::Cleaner(ShipTask::Cleaner)
-    }
-
-    fn think(&mut self, ship_id: ShipId, state: &mut GameState) {
-        match self {
-            ShipAI::Collector(ref mut task) => {
-                {
-                    let ship = state.get_ship(ship_id);
-                    match task {
-                        ShipTask::Greedy if ship.is_full() => *task = ShipTask::ReturnDijkstra,
-                        ShipTask::ReturnDijkstra if ship.halite == 0 => *task = ShipTask::Greedy,
-                        _ => {}
-                    }
-                }
-                let d = task.get_move(state, ship_id);
-                state.move_ship(ship_id, d);
-            }
-
-            ShipAI::Cleaner(ref mut task) => {
-                {
-                    let ship = state.get_ship(ship_id);
-                    match task {
-                        ShipTask::Cleaner if ship.is_full() => *task = ShipTask::ReturnDijkstra,
-                        ShipTask::ReturnDijkstra if ship.halite == 0 => *task = ShipTask::Cleaner,
-                        _ => {}
-                    }
-                }
-                let d = task.get_move(state, ship_id);
-                state.move_ship(ship_id, d);
-            }
-
-            ShipAI::Kamikaze => {
-                let d = ShipTask::Kamikaze.get_move(state, ship_id);
-                state.move_ship(ship_id, d);
-            }
-
-            ShipAI::GoHome => {
-                let d = ShipTask::GoHome.get_move(state, ship_id);
-                state.move_ship(ship_id, d);
-            }
-        }
-    }
-
-    fn is_returning_collector(&self) -> bool {
-        if let ShipAI::Collector(task) = self {
-            task.is_returning()
-        } else {
-            false
-        }
+impl<C: Ord, T: Eq> DijkstraMinNode<C, T> {
+    fn new(cost: C, data: T) -> Self {
+        DijkstraMinNode { cost, data }
     }
 }
 
 pub struct GameState {
+    config: config::Config,
     game: Game,
     navi: Navi,
     command_queue: Vec<Command>,
     collect_statistic: Vec<f64>,
     last_halite: usize,
 
-    halite_percentiles: [usize; 101],
+    pheromones: Vec<Vec<f64>>,
+    pheromones_backbuffer: Vec<Vec<f64>>,
 
-    collector_net: movement::CollectorNeuralNet,
+    halite_density: Vec<Vec<i32>>,
+    return_map_directions: Vec<Vec<Direction>>,
+    return_cumultive_costs: Vec<Vec<usize>>,
+
+    halite_percentiles: [usize; 101],
+    avg_return_length: f64,
 }
 
 impl GameState {
-    fn new(net: movement::CollectorNeuralNet) -> Self {
+    fn new(cfg_file: &str) -> Self {
         let game = Game::new();
         let state = GameState {
+            config: config::Config::from_file(cfg_file),
             navi: Navi::new(game.map.width, game.map.height),
             command_queue: vec![],
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
             last_halite: 5000,
-            game,
+
+            pheromones: vec![vec![0.0; game.map.width]; game.map.height],
+            pheromones_backbuffer: vec![vec![0.0; game.map.width]; game.map.height],
+
+            halite_density: vec![vec![0; game.map.width]; game.map.height],
+            return_map_directions: vec![vec![Direction::Still; game.map.width]; game.map.height],
+            return_cumultive_costs: vec![vec![0; game.map.width]; game.map.height],
 
             halite_percentiles: [0; 101],
+            avg_return_length: 0.0,
 
-            collector_net: net,
+            game,
         };
 
         Game::ready("MyRustBot");
@@ -179,6 +126,11 @@ impl GameState {
     fn update_frame(&mut self) {
         self.game.update_frame();
         self.navi.update_frame(&self.game);
+
+        self.compute_halite_density();
+        self.compute_return_map();
+
+        self.update_pheromones();
 
         let mut map_halite: Vec<_> = self.game.map.iter().map(|cell| cell.halite).collect();
         map_halite.sort_unstable();
@@ -201,19 +153,29 @@ impl GameState {
         self.command_queue.clear();
     }
 
-    fn finalize_frame(&mut self, runid: &str) {
+    fn finalize_frame(&mut self, _runid: &str) {
         //Log::log(&format!("issuing commands: {:?}", command_queue));
 
-        if self.game.turn_number == self.game.constants.max_turns - 5 {
+        /*if self.game.turn_number == self.game.constants.max_turns - 5 {
             Log::log("dumping neural net");
             self.collector_net.dump(&format!("netdump{}-{}.txt", runid, self.game.my_id.0));
-        }
+        }*/
 
         Game::end_turn(&self.command_queue);
 
         if self.game.turn_number == self.game.constants.max_turns {
             Log::log(&format!("collection rate: {:?}", self.collect_statistic));
         }
+    }
+
+    fn notify_return(&mut self, turns_taken: usize) {
+        const UPDATE_RATE: f64 = 0.9;
+        self.avg_return_length =
+            self.avg_return_length * UPDATE_RATE + turns_taken as f64 * (1.0 - UPDATE_RATE);
+        Log::log(&format!(
+            "Average return length: {}",
+            self.avg_return_length
+        ));
     }
 
     fn rounds_left(&self) -> usize {
@@ -232,9 +194,87 @@ impl GameState {
         &self.game.ships[&id]
     }
 
-    fn move_ship(&mut self, id: ShipId, d: Direction) {
-        let cmd = self.get_ship(id).move_ship(d);
-        self.command_queue.push(cmd);
+    fn get_ship_mut(&mut self, id: ShipId) -> &mut Ship {
+        self.game.ships.get_mut(&id).unwrap()
+    }
+
+    fn distance_to_nearest_dropoff(&self, id: ShipId) -> usize {
+        let pos = self.get_ship(id).position;
+        let dist = self
+            .game
+            .map
+            .calculate_distance(&self.me().shipyard.position, &pos);
+
+        self.me()
+            .dropoff_ids
+            .iter()
+            .map(|did| self.game.dropoffs[did].position)
+            .map(|p| self.game.map.calculate_distance(&p, &pos))
+            .fold(dist, |dist, d| dist.min(d))
+    }
+
+    fn ships_in_range<'a>(&'a self, pos: Position, r: usize) -> impl Iterator<Item = ShipId> + 'a {
+        self.my_ships().filter(move |&id| {
+            self.game
+                .map
+                .calculate_distance(&pos, &self.get_ship(id).position)
+                <= r
+        })
+    }
+
+    fn try_build_dropoff(&mut self, id: ShipId) -> bool {
+        if self.me().halite < self.game.constants.dropoff_cost {
+            return false;
+        }
+
+        self.get_ship_mut(id).make_dropoff();
+
+        self.avg_return_length = 0.0;
+
+        true
+    }
+
+    fn movement_cost(&self, pos: &Position) -> usize {
+        self.game.map.at_position(&pos).halite / self.game.constants.move_cost_ratio
+    }
+
+    fn can_move(&self, id: ShipId) -> bool {
+        let ship = self.get_ship(id);
+        ship.halite >= self.movement_cost(&ship.position)
+    }
+
+    fn move_ship(&mut self, id: ShipId, mut d: Direction) {
+        if self.can_move(id) {
+            let p0 = self.get_ship(id).position;
+            let p1 = p0.directional_offset(d);
+            self.navi.mark_safe(&p0);
+            self.navi.mark_unsafe(&p1, id);
+        } else {
+            d = Direction::Still;
+        }
+        self.get_ship_mut(id).move_ship(d);
+    }
+
+    fn try_move_ship(&mut self, id: ShipId, d: Direction) -> bool {
+        if !self.can_move(id) {
+            return false;
+        }
+        let p0 = self.get_ship(id).position;
+        let p1 = p0.directional_offset(d);
+        if self.navi.is_safe(&p1) {
+            self.navi.mark_safe(&p0);
+            self.navi.mark_unsafe(&p1, id);
+            self.get_ship_mut(id).move_ship(d);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn move_ship_or_wait(&mut self, id: ShipId, d: Direction) {
+        if !self.try_move_ship(id, d) {
+            //self.get_ship_mut(id).move_ship(Direction::Still);
+        }
     }
 
     fn get_nearest_halite_move(&self, start: Position, min_halite: usize) -> Option<Direction> {
@@ -246,10 +286,16 @@ impl GameState {
         let mut visited = HashSet::new();
         while let Some((mut p, d)) = queue.pop_front() {
             p = self.game.map.normalize(&p);
-            if visited.contains(&p) { continue }
+            if visited.contains(&p) {
+                continue;
+            }
             visited.insert(p);
-            if p == self.me().shipyard.position { continue }
-            if self.navi.is_unsafe(&p)  { continue }
+            if p == self.me().shipyard.position {
+                continue;
+            }
+            if self.navi.is_unsafe(&p) {
+                continue;
+            }
             if self.game.map.at_position(&p).halite >= min_halite {
                 return Some(d);
             }
@@ -261,13 +307,13 @@ impl GameState {
         None
     }
 
-    fn get_dijkstra_path(&self, start: Position, dest: Position) -> Vec<Direction> {
+    /*fn get_dijkstra_path(&self, start: Position, dest: Position) -> Vec<Direction> {
         const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
 
         let mut visited = HashSet::new();
 
         let mut queue = BinaryHeap::new();
-        queue.push(DijkstraNode::new(0, (start, vec![])));
+        queue.push(DijkstraMaxNode::new(0, (start, vec![])));
 
         let maxlen = ((start.x - dest.x).abs() + (start.y - dest.y).abs()).max(5) * 2; // todo: tweak me
 
@@ -302,29 +348,203 @@ impl GameState {
                 }
                 let mut newpath = path.clone();
                 newpath.push(d);
-                queue.push(DijkstraNode::new(
+                queue.push(DijkstraMaxNode::new(
                     node.cost as i64 - movement_cost as i64 - STEP_COST,
                     (p, newpath),
                 ));
             }
         }
         vec![]
+    }*/
+
+    fn get_return_dir(&self, pos: Position) -> Direction {
+        self.return_map_directions[pos.y as usize][pos.x as usize]
+    }
+
+    fn get_return_dir_alternative(&self, pos: Position) -> Direction {
+        let original = self.get_return_dir(pos);
+        Direction::get_all_cardinals()
+            .iter()
+            .filter(|&&d| d != original)
+            .map(|&d| (d, self.game.map.normalize(&pos.directional_offset(d))))
+            .min_by_key(|(_, p)| self.return_cumultive_costs[p.y as usize][p.x as usize])
+            .unwrap()
+            .0
+    }
+
+    fn get_return_distance(&self, mut pos: Position) -> usize {
+        let mut dist = 0;
+        loop {
+            pos = self.game.map.normalize(&pos);
+            match self.return_map_directions[pos.y as usize][pos.x as usize] {
+                Direction::Still => return dist,
+                d => pos = pos.directional_offset(d),
+            }
+            dist += 1;
+        }
+    }
+
+    fn compute_return_map(&mut self) {
+        for cc in self
+            .return_cumultive_costs
+            .iter_mut()
+            .flat_map(|row| row.iter_mut())
+        {
+            *cc = usize::max_value();
+        }
+
+        let mut queue = BinaryHeap::new();
+        queue.push(DijkstraMinNode::new(
+            0,
+            (self.me().shipyard.position, Direction::Still),
+        ));
+        for id in &self.me().dropoff_ids {
+            queue.push(DijkstraMinNode::new(
+                0,
+                (self.game.dropoffs[id].position, Direction::Still),
+            ));
+        }
+
+        while let Some(node) = queue.pop() {
+            let (mut pos, dir) = node.data;
+            pos = self.game.map.normalize(&pos);
+            let (i, j) = (pos.y as usize, pos.x as usize);
+
+            if node.cost >= self.return_cumultive_costs[i][j] {
+                continue;
+            }
+
+            self.return_cumultive_costs[i][j] = node.cost;
+            self.return_map_directions[i][j] = dir;
+
+            for d in Direction::get_all_cardinals() {
+                // make sure we leave an exit open
+                if dir == Direction::Still && d == Direction::East {
+                    continue;
+                }
+                let p = pos.directional_offset(d.invert_direction());
+                let c = node.cost + self.movement_cost(&p) + self.config.navigation.return_step_cost;
+                queue.push(DijkstraMinNode::new(c, (p, d)));
+            }
+        }
+    }
+
+    fn compute_halite_density(&mut self) {
+        let r = 5_i32;
+        let n = 2 * r * (r + 1) + 1; // number of pixels within manhatten distance of r
+
+        for (i, row) in self.halite_density.iter_mut().enumerate() {
+            for (j, d) in row.iter_mut().enumerate() {
+                *d = 0;
+                for a in -r..=r {
+                    for b in -r..=r {
+                        if a.abs() + b.abs() > r {
+                            continue;
+                        }
+                        *d += self
+                            .game
+                            .map
+                            .at_position(&Position {
+                                x: j as i32 - b,
+                                y: i as i32 - a,
+                            })
+                            .halite as i32;
+                    }
+                }
+                *d /= n
+            }
+        }
+    }
+
+    fn push(&mut self, pos: Position) {
+        let id = if let Some(id) = self
+            .my_ships()
+            .find(|&id| self.get_ship(id).position == pos)
+        {
+            id
+        } else {
+            return;
+        };
+
+        Log::log(&format!("pushing {:?}", pos));
+
+        if Direction::get_all_cardinals()
+            .into_iter()
+            .any(|d| self.try_move_ship(id, d))
+        {
+            return;
+        }
+
+        self.push(pos.directional_offset(Direction::West));
+        self.try_move_ship(id, Direction::West);
+    }
+
+    fn update_pheromones(&mut self) {
+        let w = self.game.map.width;
+        let h = self.game.map.height;
+
+        for i in 0..h {
+            for j in 0..w {
+                self.pheromones_backbuffer[i][j] = (self.game.map.cells[i][j].halite as f64 + self.pheromones[i][j]) * self.config.pheromones.evaporation_rate;
+            }
+        }
+
+        for i in 0..h {
+            for j in 0..w {
+                let dy = (self.pheromones[(i + 1) % h][j] - self.pheromones[i][j]) * self.config.pheromones.diffusion_rate;
+                let dx = (self.pheromones[i][(j + 1) % w] - self.pheromones[i][j]) * self.config.pheromones.diffusion_rate;
+
+                self.pheromones_backbuffer[(i + 1) % h][j] -= dy;
+                self.pheromones_backbuffer[i][(j + 1) % w] -= dx;
+
+                self.pheromones_backbuffer[i][j] += dx + dy;
+            }
+        }
+
+        // ships absorb pheromones to avoid balling up
+        for id in self.me().ship_ids.clone().into_iter() {
+            let pos = self.get_ship(id).position;
+            let cap = self.get_ship(id).capacity();
+            let (i, j) = (pos.y as usize, pos.x as usize);
+            self.pheromones_backbuffer[i][j] = (self.pheromones_backbuffer[i][j] - cap as f64).max(0.0);
+        }
+
+        std::mem::swap(&mut self.pheromones, &mut self.pheromones_backbuffer);
+    }
+
+    fn add_pheromone(&mut self, pos: Position, amount: f64) {
+        let pos = self.game.map.normalize(&pos);
+        let (i, j) = (pos.y as usize, pos.x as usize);
+        self.pheromones[i][j] += amount;
+    }
+
+    fn get_pheromone(&self, pos: Position) -> f64 {
+        let pos = self.game.map.normalize(&pos);
+        let (i, j) = (pos.y as usize, pos.x as usize);
+        self.pheromones[i][j]
     }
 }
 
-#[derive(Default)]
 struct Commander {
     new_ships: HashSet<ShipId>,
     lost_ships: HashSet<ShipId>,
     ships: HashSet<ShipId>,
-    ship_ais: HashMap<ShipId, ShipAI>,
+    ship_ais: HashMap<ShipId, Box<dyn BtNode<GameState>>>,
 
+    builder: Option<ShipId>,
     kamikaze: Option<ShipId>,
 }
 
 impl Commander {
     fn new() -> Self {
-        Self::default()
+        Commander {
+            new_ships: HashSet::new(),
+            lost_ships: HashSet::new(),
+            ships: HashSet::new(),
+            ship_ais: HashMap::new(),
+            builder: None,
+            kamikaze: None,
+        }
     }
 
     fn sync(&mut self, state: &GameState) {
@@ -336,18 +556,19 @@ impl Commander {
     }
 
     fn process_frame(&mut self, state: &mut GameState) {
-        let shipyard_pos = state.me().shipyard.position;
-
         for id in self.lost_ships.drain() {
             self.ship_ais.remove(&id);
             if self.kamikaze == Some(id) {
                 self.kamikaze = None
             }
+            if self.builder == Some(id) {
+                self.builder = None
+            }
         }
 
         for id in self.new_ships.drain() {
             self.ships.insert(id);
-            self.ship_ais.insert(id, ShipAI::new_collector());
+            self.ship_ais.insert(id, collector(id));
         }
 
         Log::log(&format!("commanding {} ships", self.ships.len()));
@@ -356,43 +577,51 @@ impl Commander {
 
         if let Some(id) = self.kamikaze {
             if state.get_ship(id).position == syp {
-                *self.ship_ais.get_mut(&id).unwrap() = ShipAI::new_collector();
+                *self.ship_ais.get_mut(&id).unwrap() = collector(id);
                 self.kamikaze = None;
             }
         }
 
+        let want_dropoff = state.avg_return_length >= state.config.expansion.expansion_distance as f64;
+
+        if want_dropoff && state.me().halite >= state.game.constants.dropoff_cost {
+
+            let id = self
+                .ships
+                .iter()
+                .filter(|&&id| state.distance_to_nearest_dropoff(id) >= state.config.expansion.expansion_distance)
+                .filter(|&&id| {
+                    state
+                        .ships_in_range(state.get_ship(id).position, state.config.expansion.ship_radius)
+                        .count()
+                        >= state.config.expansion.n_ships
+                })
+                .map(|&id| {
+                    let p = state.get_ship(id).position;
+                    (id, state.halite_density[p.y as usize][p.x as usize])
+                })
+                .filter(|&(_, density)| density >= state.config.expansion.min_halite_density)
+                .max_by_key(|&(_, density)| density)
+                .map(|(id, _)| id);
+
+            self.builder = id;
+
+            if let Some(id) = id {
+                *self.ship_ais.get_mut(&id).unwrap() = build_dropoff(id);
+            }
+        }
+
+        state.push(syp);
+
+        for id in state.me().dropoff_ids.clone() {
+            let pos = state.game.dropoffs[&id].position;
+            state.push(pos);
+        }
+
         for (&id, ai) in &mut self.ship_ais {
-            if state.rounds_left() < 150 && ai != &ShipAI::GoHome {
-                const GO_HOME_SAFETY_FACTOR: usize = 1;
-
-                let path = state.get_dijkstra_path(state.get_ship(id).position, shipyard_pos);
-
-                if path.len() >= state.rounds_left() - self.ships.len() * GO_HOME_SAFETY_FACTOR {
-                    *ai = ShipAI::GoHome;
-                }
+            if state.get_ship(id).command.is_none() {
+                ai.tick(state);
             }
-
-            if state.halite_percentiles[99] < 100 {
-                if let ShipAI::Collector(_) = ai {
-                    *ai = ShipAI::new_cleaner();
-                }
-            }
-
-            if state.get_ship(id).position == syp && ai != &ShipAI::GoHome {
-                Log::log(&format!("force moving ship {:?} from spawn", id));
-                for d in Direction::get_all_cardinals() {
-                    let p = syp.directional_offset(d);
-                    if state.navi.is_safe(&p) {
-                        state.navi.mark_unsafe(&p, id);
-                        state.move_ship(id, d);
-                        Log::log(&format!("        to {:?}", d));
-                        break
-                    }
-                }
-            } else {
-                ai.think(id, state);
-            }
-
         }
 
         let enemy_blocks = state
@@ -407,22 +636,22 @@ impl Commander {
             if let Some((id, _)) = self
                 .ship_ais
                 .iter()
-                .filter(|(_, ai)| ai.is_returning_collector())
+                //.filter(|(_, ai)| ai.is_returning_collector())
                 .map(|(&id, _)| (id, state.get_ship(id).position))
                 .map(|(id, pos)| (id, (pos.x - t.x).abs() + (pos.y - t.y).abs()))
                 .min_by_key(|&(_, dist)| dist)
             {
                 self.kamikaze = Some(id);
-                *self.ship_ais.get_mut(&id).unwrap() = ShipAI::Kamikaze;
+                *self.ship_ais.get_mut(&id).unwrap() = kamikaze(id);
             }
         }
 
-        let want_ship = if state.game.turn_number > 100 {
+        let mut want_ship = if state.game.turn_number > 100 {
             // average halite collected per ship in the last n turns
-            let avg_collected = state.collect_statistic[state.game.turn_number - 100..]
+            let avg_collected = state.collect_statistic[state.game.turn_number - state.config.statistics.halite_collection_window ..]
                 .iter()
                 .sum::<f64>()
-                / 100.0;
+                / state.config.statistics.halite_collection_window as f64;
 
             let predicted_profit = avg_collected * state.rounds_left() as f64;
 
@@ -431,6 +660,10 @@ impl Commander {
             true
         };
 
+        want_ship &= !want_dropoff
+            || state.me().halite
+                >= state.game.constants.dropoff_cost + state.game.constants.ship_cost;
+
         if enemy_blocks && state.me().halite >= state.game.constants.ship_cost
             || (want_ship && state.navi.is_safe(&state.me().shipyard.position))
                 && state.me().halite >= state.game.constants.ship_cost
@@ -438,6 +671,12 @@ impl Commander {
             let cmd = state.me().shipyard.spawn();
             state.command_queue.push(cmd);
         }
+
+        let cmds = state
+            .my_ships()
+            .filter_map(|id| state.get_ship(id).command.clone())
+            .collect::<Vec<_>>();
+        state.command_queue.extend(cmds);
     }
 }
 
@@ -459,13 +698,21 @@ fn main() {
         seed_bytes[12], seed_bytes[13], seed_bytes[14], seed_bytes[15]
     ]);*/
 
-    let net = if args.len() > 1 {
+    /*let net = if args.len() > 1 {
         Log::log(&format!("loading network from file {}", args[1]));
         movement::CollectorNeuralNet::from_file(&args[1])
     } else {
         Log::log("using default network");
         movement::CollectorNeuralNet::new()
+    };*/
+
+    let cfg_file = if args.len() > 1 {
+        args[1].clone()
+    } else {
+        "config.json".to_string()
     };
+
+    Log::log(&format!("using config file: {}", cfg_file));
 
     let runid = if args.len() > 2 {
         &args[2]
@@ -474,7 +721,7 @@ fn main() {
     };
 
     let mut commander = Commander::new();
-    let mut game = GameState::new(net);
+    let mut game = GameState::new(&cfg_file);
 
     loop {
         game.update_frame();

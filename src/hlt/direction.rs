@@ -30,10 +30,20 @@ impl Direction {
 
     pub fn get_all_cardinals() -> Vec<Direction> {
         vec![
-            Direction::East,
             Direction::West,
+            Direction::East,
             Direction::North,
             Direction::South,
+        ]
+    }
+
+    pub fn get_all_options() -> Vec<Direction> {
+        vec![
+            Direction::West,
+            Direction::East,
+            Direction::North,
+            Direction::South,
+            Direction::Still,
         ]
     }
 
