@@ -506,19 +506,16 @@ impl GameState {
         std::mem::swap(&mut self.pheromones, &mut self.pheromones_backbuffer);
     }
 
+    fn add_pheromone(&mut self, pos: Position, amount: f64) {
+        let pos = self.game.map.normalize(&pos);
+        let (i, j) = (pos.y as usize, pos.x as usize);
+        self.pheromones[i][j] += amount;
+    }
+
     fn get_pheromone(&self, pos: Position) -> f64 {
         let pos = self.game.map.normalize(&pos);
         let (i, j) = (pos.y as usize, pos.x as usize);
         self.pheromones[i][j]
-    }
-
-    fn get_pheromone_gradient(&self, pos: Position) -> (f64, f64) {
-        let w = self.game.map.width;
-        let h = self.game.map.height;
-        let (i, j) = (pos.y as usize, pos.x as usize);
-        let dx = self.pheromones[i][(j + 1) % w] - self.pheromones[i][j];
-        let dy = self.pheromones[(i + 1) % h][j] - self.pheromones[i][j];
-        (dx, dy)
     }
 }
 

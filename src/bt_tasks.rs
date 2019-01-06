@@ -2,7 +2,6 @@ use behavior_tree::{interrupt, lambda, run_or_fail, select, sequence, BtNode, Bt
 use hlt::direction::Direction;
 use hlt::ShipId;
 use GameState;
-use rand::{thread_rng, Rng};
 
 fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
     let mut turns_taken = 0;
@@ -21,6 +20,9 @@ fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
             let d = state.get_return_dir_alternative(pos);
             state.move_ship_or_wait(id, d);
         }
+
+        let cargo = state.get_ship(id).halite;
+        state.add_pheromone(pos, cargo as f64);
 
         turns_taken += 1;
 
