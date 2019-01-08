@@ -30,4 +30,20 @@ impl Position {
             self.directional_offset(Direction::West),
         ]
     }
+
+    pub fn relative_to(&self, other: Position, width: i32, height: i32) -> Option<Direction> {
+        match (self.x - other.x, self.y - other.y) {
+            (0, -1) => Some(Direction::North),
+            (0, 1) => Some(Direction::South),
+            (-1, 0) => Some(Direction::West),
+            (1, 0) => Some(Direction::East),
+            (0, 0) => Some(Direction::Still),
+            (0, dy) if dy == height - 1 => Some(Direction::North),
+            (0, dy) if dy == 1 - height => Some(Direction::South),
+            (dx, 0) if dx == width - 1 => Some(Direction::West),
+            (dx, 0) if dx == 1 - width => Some(Direction::East),
+            (0, 0) => Some(Direction::Still),
+            _ => panic!("relative_to({:?}, {:?})", self, other),
+        }
+    }
 }

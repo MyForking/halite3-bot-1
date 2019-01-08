@@ -1,7 +1,23 @@
-use behavior_tree::{interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState};
+use behavior_tree::{continuous, interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState};
 use hlt::direction::Direction;
 use hlt::ShipId;
 use GameState;
+
+fn stuck_move(id: ShipId, state: &mut GameState) -> bool {
+    let pos = state.get_ship(id).position;
+    let cargo = state.get_ship(id).halite;
+    let cap = state.get_ship(id).capacity();
+
+    let harvest = state.config.navigation.return_step_cost as i32
+        - state.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
+
+    if state.movement_cost(&pos) > cargo {
+        state.gns.plan_move(id, pos, harvest, i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value());
+        true
+    } else {
+        false
+    }
+}
 
 fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
     let mut turns_taken = 0;
@@ -12,16 +28,22 @@ fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
         }
 
         let pos = state.get_ship(id).position;
-        //let dest = state.me().shipyard.position;
-        //let path = state.get_dijkstra_path(pos, dest);
-        //let d = path.first().cloned().unwrap_or(Direction::Still);
-        let d = state.get_return_dir(pos);
-        if !state.try_move_ship(id, d) {
-            let d = state.get_return_dir_alternative(pos);
-            state.move_ship_or_wait(id, d);
+        let cap = state.get_ship(id).capacity();
+        let cargo = state.get_ship(id).halite;
+
+        let harvest = state.config.navigation.return_step_cost as i32
+            - state.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
+
+        if !stuck_move(id, state) {
+            let [c0, cn, cs, ce, cw] = state.get_return_dir_costs(pos);
+
+            let cn = cn - c0;
+            let cs = cs - c0;
+            let ce = ce - c0;
+            let cw = cw - c0;
+            state.gns.plan_move(id, pos, harvest, cn, cs, ce, cw);
         }
 
-        let cargo = state.get_ship(id).halite;
         state.add_pheromone(pos, cargo as f64);
 
         turns_taken += 1;
@@ -33,20 +55,32 @@ fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
 fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
         let pos = state.get_ship(id).position;
-        //let dest = state.me().shipyard.position;
-        //let path = state.get_dijkstra_path(pos, dest);
-        //let d = path.first().cloned().unwrap_or(Direction::Still);
-        let d = state.get_return_dir(pos);
-        let p = pos.directional_offset(d);
+        let cargo = state.get_ship(id).halite;
 
-        if state.game.map.at_position(&p).structure.is_some() {
-            state.move_ship(id, d);
-        } else {
-            if !state.try_move_ship(id, d) {
-                let d = state.get_return_dir_alternative(pos);
-                state.move_ship_or_wait(id, d);
+        if stuck_move(id, state) {return BtState::Running}
+
+        for d in Direction::get_all_cardinals() {
+            if state
+                .game
+                .map
+                .at_position(&pos.directional_offset(d))
+                .structure
+                .is_some()
+            {
+                // todo: only my own structures?
+                state.gns.force_move(id, d);
+                return BtState::Running;
             }
         }
+
+        let [c0, cn, cs, ce, cw] = state.get_return_dir_costs(pos);
+
+        let cn = cn - c0;
+        let cs = cs - c0;
+        let ce = ce - c0;
+        let cw = cw - c0;
+        let c0 = state.config.navigation.return_step_cost as i32;
+        state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 
         BtState::Running
     })
@@ -70,31 +104,38 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
 fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
         let pos = state.get_ship(id).position;
+        let cap = state.get_ship(id).capacity();
         let current_halite = state.game.map.at_position(&pos).halite;
+        let cargo = state.get_ship(id).halite;
 
         if current_halite >= state.config.ships.greedy_seek_limit {
             return BtState::Success;
         }
 
-        let d = Direction::get_all_options()
-            .into_iter()
-            .map(|d| (d, state.game.map.normalize(&pos.directional_offset(d))))
-            .filter(|(_, p)| state.navi.is_safe(p) || *p == pos)
-            .max_by_key(|(_, p)| (state.get_pheromone(*p) * 1000.0) as i32)
-            .map(|(d, _)| d)
-            .unwrap_or(Direction::Still);
+        let harvest = state.config.navigation.return_step_cost as i32
+            - state.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
 
-        state.move_ship(id, d);
+        if stuck_move(id, state) {return BtState::Running}
+
+        let mc = state.movement_cost(&pos) as i32;
+
+        let cap = state.get_ship(id).capacity();
+        let cargo = state.get_ship(id).halite;
+
+        let p0 = state.get_pheromone(pos);
+        let pn = state.get_pheromone(pos.directional_offset(Direction::North));
+        let ps = state.get_pheromone(pos.directional_offset(Direction::South));
+        let pe = state.get_pheromone(pos.directional_offset(Direction::East));
+        let pw = state.get_pheromone(pos.directional_offset(Direction::West));
+
+        let cn = mc + ((pn - p0) * state.config.ships.seek_pheromone_cost) as i32;
+        let cs = mc + ((ps - p0) * state.config.ships.seek_pheromone_cost) as i32;
+        let ce = mc + ((pe - p0) * state.config.ships.seek_pheromone_cost) as i32;
+        let cw = mc + ((pw - p0) * state.config.ships.seek_pheromone_cost) as i32;
+        let c0 = -(state.halite_gain(&pos).min(cap) as i32); // we may actually gain something from waiting...
+        state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 
         BtState::Running
-
-        /*match state.get_nearest_halite_move(pos, SEEK_LIMIT) {
-            Some(d) => {
-                state.move_ship(id, d);
-                BtState::Running
-            }
-            None => BtState::Failure,
-        }*/
     })
 }
 
@@ -108,12 +149,15 @@ fn find_desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
         }
 
         match state.get_nearest_halite_move(pos, 1) {
-            Some(d) => {
-                state.move_ship(id, d);
-                BtState::Running
-            }
-            None => BtState::Failure,
+            Some(Direction::North) => state.gns.plan_move(id, pos, 2, 1, 3, 3, 3),
+            Some(Direction::South) => state.gns.plan_move(id, pos, 2, 3, 1, 3, 3),
+            Some(Direction::East) => state.gns.plan_move(id, pos, 2, 3, 3, 1, 3),
+            Some(Direction::West) => state.gns.plan_move(id, pos, 2, 3, 3, 3, 1),
+            Some(Direction::Still) => state.gns.plan_move(id, pos, 0, 2, 2, 2, 2),
+            None => return BtState::Failure,
         }
+
+        BtState::Running
     })
 }
 
@@ -123,71 +167,33 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
             return BtState::Success;
         }
 
-        let (pos, cargo) = {
-            let ship = state.get_ship(id);
-            (ship.position, ship.halite)
-        };
+        if stuck_move(id, state) {return BtState::Running}
 
-        let movement_cost =
-            state.game.map.at_position(&pos).halite / state.game.constants.move_cost_ratio;
+        let pos = state.get_ship(id).position;
+        let cap = state.get_ship(id).capacity();
+        let cargo = state.get_ship(id).halite;
 
-        if cargo < movement_cost {
-            state.move_ship(id, Direction::Still);
-            return BtState::Running;
-        }
+        let p0 = state.get_pheromone(pos);
+        let pn = state.get_pheromone(pos.directional_offset(Direction::North));
+        let ps = state.get_pheromone(pos.directional_offset(Direction::South));
+        let pe = state.get_pheromone(pos.directional_offset(Direction::East));
+        let pw = state.get_pheromone(pos.directional_offset(Direction::West));
 
-        let syp = state.me().shipyard.position;
+        let mc = state.movement_cost(&pos) as i32;
 
-        let current_halite = state.game.map.at_position(&pos).halite;
-        let current_value = current_halite / state.game.constants.extract_ratio;
+        let cn = mc + ((pn - p0) * state.config.ships.seek_pheromone_cost) as i32;
+        let cs = mc + ((ps - p0) * state.config.ships.seek_pheromone_cost) as i32;
+        let ce = mc + ((pe - p0) * state.config.ships.seek_pheromone_cost) as i32;
+        let cw = mc + ((pw - p0) * state.config.ships.seek_pheromone_cost) as i32;
+        let c0 = -(state.halite_gain(&pos).min(cap) as i32);
 
-        if current_halite >= state.config.ships.greedy_harvest_limit {
-            state.move_ship(id, Direction::Still);
-            return BtState::Running;
-        }
-
-        let mov = Direction::get_all_cardinals()
-            .into_iter()
-            .map(|d| (d, pos.directional_offset(d)))
-            .map(|(d, p)| {
-                (
-                    state.game.map.at_position(&p).halite / state.game.constants.extract_ratio,
-                    d,
-                    p,
-                )
-            })
-            .filter(|&(_, _, p)| p != syp)
-            .filter(|&(value, _, _)| {
-                value > movement_cost + current_value * state.config.ships.greedy_prefer_stay_factor
-            })
-            .filter(|(_, _, p)| state.navi.is_safe(p))
-            .map(|(value, d, p)| {
-                (
-                    value
-                        + (state.get_pheromone(p) * state.config.ships.greedy_pheromone_weight)
-                            as usize,
-                    d,
-                    p,
-                )
-            })
-            .max_by_key(|&(value, _, _)| value)
-            .map(|(_, d, _)| d);
-
-        let d = match mov {
-            None if current_halite < state.config.ships.greedy_seek_limit => {
-                return BtState::Failure
-            }
-            None => Direction::Still,
-            Some(d) => d,
-        };
-
-        state.move_ship(id, d);
+        state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 
         BtState::Running
     })
 }
 
-fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
+/*fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
         if state.get_ship(id).is_full() {
             return BtState::Success;
@@ -223,7 +229,7 @@ fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
             }
         }
     })
-}
+}*/
 
 pub fn build_dropoff(id: ShipId) -> Box<impl BtNode<GameState>> {
     sequence(vec![
@@ -233,13 +239,14 @@ pub fn build_dropoff(id: ShipId) -> Box<impl BtNode<GameState>> {
 }
 
 pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
+    continuous(
     select(vec![
         interrupt(
             select(vec![
                 sequence(vec![greedy(id), deliver(id)]),
-                find_res(id),
+                /*find_res(id),
                 sequence(vec![desperate(id), deliver(id)]),
-                find_desperate(id),
+                find_desperate(id),*/
             ]),
             move |env| {
                 let dist = env.get_return_distance(env.get_ship(id).position);
@@ -250,7 +257,7 @@ pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
             },
         ),
         go_home(id),
-    ])
+    ]))
 }
 
 pub fn kamikaze(id: ShipId) -> Box<impl BtNode<GameState>> {

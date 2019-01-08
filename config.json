@@ -20,7 +20,9 @@
     "greedy_prefer_stay_factor": 2,
     "greedy_harvest_limit": 50,
     "greedy_seek_limit": 50,
-    "greedy_pheromone_weight": 2.0
+    "greedy_pheromone_weight": 2.0,
+
+    "seek_pheromone_cost": -0.01
   },
 
   "statistics": {

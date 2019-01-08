@@ -13,9 +13,6 @@ pub struct Ship {
     pub position: Position,
     pub halite: usize,
     max_halite: usize,
-
-    #[serde(skip)]
-    pub command: Option<Command>,
 }
 
 impl Ship {
@@ -26,24 +23,24 @@ impl Ship {
         self.max_halite - self.halite
     }
 
-    pub fn make_dropoff(&mut self) {
-        self.command = Some(Command::transform_ship_into_dropoff_site(self.id));
+    pub fn make_dropoff(&mut self) -> Command {
+        Command::transform_ship_into_dropoff_site(self.id)
     }
 
-    pub fn move_ship(&mut self, direction: Direction) {
+    /*pub fn move_ship(&mut self, direction: Direction) {
         self.command = Some(Command::move_ship(self.id, direction));
     }
 
     pub fn stay_still(&mut self) {
         self.command = Some(Command::move_ship(self.id, Direction::Still));
-    }
+    }*/
 
-    pub fn is_moving(&mut self) -> bool {
+    /*pub fn is_moving(&mut self) -> bool {
         self.command
             .as_ref()
             .map(|cmd| cmd.0.starts_with('m'))
             .unwrap_or(false)
-    }
+    }*/
 
     pub fn generate(input: &mut Input, player_id: PlayerId, max_halite: usize) -> Ship {
         input.read_and_parse_line();
@@ -58,7 +55,6 @@ impl Ship {
             position: Position { x, y },
             halite,
             max_halite,
-            command: None,
         }
     }
 }

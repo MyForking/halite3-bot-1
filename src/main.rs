@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate lazy_static;
+extern crate pathfinding;
 //extern crate rand;
 extern crate serde;
 extern crate serde_json;
@@ -29,6 +30,7 @@ mod behavior_tree;
 mod bt_tasks;
 mod config;
 mod hlt;
+mod navigation_system;
 
 /*#[derive(Debug, Eq, PartialEq)]
 struct DijkstraMaxNode<C: Ord, T: Eq> {
@@ -89,6 +91,9 @@ pub struct GameState {
     navi: Navi,
 
     #[serde(skip)]
+    gns: navigation_system::NavigationSystem,
+
+    #[serde(skip)]
     command_queue: Vec<Command>,
 
     collect_statistic: Vec<f64>,
@@ -111,6 +116,7 @@ impl GameState {
         let state = GameState {
             config: config::Config::from_file(cfg_file),
             navi: Navi::new(game.map.width, game.map.height),
+            gns: navigation_system::NavigationSystem::new(game.map.width, game.map.height),
             command_queue: vec![],
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
             last_halite: 5000,
@@ -136,6 +142,7 @@ impl GameState {
     fn update_frame(&mut self) {
         self.game.update_frame();
         self.navi.update_frame(&self.game);
+        self.gns.clear();
 
         self.compute_halite_density();
         self.compute_return_map();
@@ -248,7 +255,8 @@ impl GameState {
             return false;
         }
 
-        self.get_ship_mut(id).make_dropoff();
+        let cmd = self.get_ship_mut(id).make_dropoff();
+        self.command_queue.push(cmd);
 
         self.avg_return_length = 0.0;
 
@@ -259,12 +267,17 @@ impl GameState {
         self.game.map.at_position(&pos).halite / self.game.constants.move_cost_ratio
     }
 
+    fn halite_gain(&self, pos: &Position) -> usize {
+        // todo: add inspiration
+        self.game.map.at_position(&pos).halite / self.game.constants.extract_ratio
+    }
+
     fn can_move(&self, id: ShipId) -> bool {
         let ship = self.get_ship(id);
         ship.halite >= self.movement_cost(&ship.position)
     }
 
-    fn move_ship(&mut self, id: ShipId, mut d: Direction) {
+    /*fn move_ship(&mut self, id: ShipId, mut d: Direction) {
         if self.can_move(id) {
             let p0 = self.get_ship(id).position;
             let p1 = p0.directional_offset(d);
@@ -296,7 +309,7 @@ impl GameState {
         if !self.try_move_ship(id, d) {
             //self.get_ship_mut(id).move_ship(Direction::Still);
         }
-    }
+    }*/
 
     fn get_nearest_halite_move(&self, start: Position, min_halite: usize) -> Option<Direction> {
         let mut queue = VecDeque::new();
@@ -393,6 +406,33 @@ impl GameState {
             .0
     }
 
+    fn get_return_dir_costs(&self, pos: Position) -> [i32; 5] {
+        let p0 = self.game.map.normalize(&pos);
+        let pn = self
+            .game
+            .map
+            .normalize(&pos.directional_offset(Direction::North));
+        let ps = self
+            .game
+            .map
+            .normalize(&pos.directional_offset(Direction::South));
+        let pe = self
+            .game
+            .map
+            .normalize(&pos.directional_offset(Direction::East));
+        let pw = self
+            .game
+            .map
+            .normalize(&pos.directional_offset(Direction::West));
+        [
+            self.return_cumultive_costs[p0.y as usize][p0.x as usize] as i32,
+            self.return_cumultive_costs[pn.y as usize][pn.x as usize] as i32,
+            self.return_cumultive_costs[ps.y as usize][ps.x as usize] as i32,
+            self.return_cumultive_costs[pe.y as usize][pe.x as usize] as i32,
+            self.return_cumultive_costs[pw.y as usize][pw.x as usize] as i32,
+        ]
+    }
+
     fn get_return_distance(&self, mut pos: Position) -> usize {
         let mut dist = 0;
         loop {
@@ -478,7 +518,7 @@ impl GameState {
         }
     }
 
-    fn push(&mut self, pos: Position) {
+    /*fn push(&mut self, pos: Position) {
         let id = if let Some(id) = self
             .my_ships()
             .find(|&id| self.get_ship(id).position == pos)
@@ -499,7 +539,7 @@ impl GameState {
 
         self.push(pos.directional_offset(Direction::West));
         self.try_move_ship(id, Direction::West);
-    }
+    }*/
 
     fn update_pheromones(&mut self) {
         let w = self.game.map.width;
@@ -644,17 +684,15 @@ impl Commander {
             }
         }
 
-        state.push(syp);
+        /*state.push(syp);
 
         for id in state.me().dropoff_ids.clone() {
             let pos = state.game.dropoffs[&id].position;
             state.push(pos);
-        }
+        }*/
 
         for (&id, ai) in &mut self.ship_ais {
-            if state.get_ship(id).command.is_none() {
-                ai.tick(state);
-            }
+            ai.tick(state);
         }
 
         let enemy_blocks = state
@@ -702,15 +740,13 @@ impl Commander {
             || (want_ship && state.navi.is_safe(&state.me().shipyard.position))
                 && state.me().halite >= state.game.constants.ship_cost
         {
-            let cmd = state.me().shipyard.spawn();
-            state.command_queue.push(cmd);
+            let pos = state.me().shipyard.position;
+            state.gns.notify_spawn(pos);
         }
 
-        let cmds = state
-            .my_ships()
-            .filter_map(|id| state.get_ship(id).command.clone())
-            .collect::<Vec<_>>();
-        state.command_queue.extend(cmds);
+        state.gns.solve_moves();
+
+        state.command_queue.extend(state.gns.execute());
     }
 }
 
