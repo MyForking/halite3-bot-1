@@ -28,6 +28,13 @@ pub fn lambda<E, F: FnMut(&mut E) -> BtState>(func: F) -> Box<impl BtNode<E>> {
     })
 }*/
 
+pub fn continuous<E>(mut child: NodePtr<E>) -> Box<impl BtNode<E>> {
+    lambda(move|state|{
+        while child.tick(state) != BtState::Running { }
+        BtState::Running
+    })
+}
+
 pub fn sequence<E>(children: Vec<NodePtr<E>>) -> Box<impl BtNode<E>> {
     Box::new(Sequence::new(children))
 }
