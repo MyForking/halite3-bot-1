@@ -22,7 +22,8 @@
     "greedy_seek_limit": 50,
     "greedy_pheromone_weight": 2.0,
 
-    "seek_pheromone_cost": -0.01
+    "seek_return_cost_factor": 0.0,
+    "seek_pheromone_cost": -0.012
   },
 
   "statistics": {

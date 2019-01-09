@@ -101,7 +101,7 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
     })
 }*/
 
-fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
+/*fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
         let pos = state.get_ship(id).position;
         let cap = state.get_ship(id).capacity();
@@ -159,7 +159,7 @@ fn find_desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         BtState::Running
     })
-}
+}*/
 
 fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
@@ -179,12 +179,21 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         let pe = state.get_pheromone(pos.directional_offset(Direction::East));
         let pw = state.get_pheromone(pos.directional_offset(Direction::West));
 
+        let [r0, rn, rs, re, rw] = state.get_return_dir_costs(pos);
+        let rn = (rn - r0) as f64;
+        let rs = (rs - r0) as f64;
+        let re = (re - r0) as f64;
+        let rw = (rw - r0) as f64;
+
         let mc = state.movement_cost(&pos) as i32;
 
-        let cn = mc + ((pn - p0) * state.config.ships.seek_pheromone_cost) as i32;
-        let cs = mc + ((ps - p0) * state.config.ships.seek_pheromone_cost) as i32;
-        let ce = mc + ((pe - p0) * state.config.ships.seek_pheromone_cost) as i32;
-        let cw = mc + ((pw - p0) * state.config.ships.seek_pheromone_cost) as i32;
+        // todo: factor in neighboring halite deposits
+        //       return cost factor did not seem to have much effect
+
+        let cn = mc + ((pn - p0) * state.config.ships.seek_pheromone_cost + rn * state.config.ships.seek_return_cost_factor) as i32;
+        let cs = mc + ((ps - p0) * state.config.ships.seek_pheromone_cost + rn * state.config.ships.seek_return_cost_factor) as i32;
+        let ce = mc + ((pe - p0) * state.config.ships.seek_pheromone_cost + rn * state.config.ships.seek_return_cost_factor) as i32;
+        let cw = mc + ((pw - p0) * state.config.ships.seek_pheromone_cost + rn * state.config.ships.seek_return_cost_factor) as i32;
         let c0 = -(state.halite_gain(&pos).min(cap) as i32);
 
         state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);

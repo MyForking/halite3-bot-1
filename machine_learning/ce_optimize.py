@@ -9,7 +9,7 @@ import os
 import scipy.stats as sps
 
 def start_game(cfgfile):        
-    proc = subprocess.Popen(['../halite', '--no-timeout', '--no-replay', '--no-logs', '--width 32', '--height 32', '--results-as-json', '../target/release/my_bot ' + aifile, '../target/release/my_bot ' + aifile], stdout=subprocess.PIPE)
+    proc = subprocess.Popen(['../halite', '--no-timeout', '--no-replay', '--no-logs', '--width 32', '--height 32', '--results-as-json', '../target/release/my_bot -c ' + cfgfile, '../old_bots/v13'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return proc
 
 def get_game(proc):    
@@ -19,35 +19,24 @@ def get_game(proc):
     #print(ids, err)
     res = json.loads(out)
     
-    score0 = res['stats']['0']['score'] / res['map_total_halite']
-    score1 = res['stats']['1']['score'] / res['map_total_halite']
+    score0 = 100 * res['stats']['0']['score'] / res['map_total_halite']
+    score1 = 100 * res['stats']['1']['score'] / res['map_total_halite']
     
     return score0, score1
 
 config = json.load(open('../config.json'))
 
-LEARNING_RATE = 1e-1
+LEARNING_RATE = 3e-1
 
 parsize = 4
-batchsize = 100
-n_best = 10
+batchsize = 1000
+n_best = 100
 
-mu = {'ships': {'greedy_pheromone_weight': 1.0,
-                'greedy_seek_limit': 50,
-                'greedy_harvest_limit': 10,
-                'greedy_prefer_stay_factor': 2}}
-var = {'ships': {'greedy_pheromone_weight': 10.0,
-                'greedy_seek_limit': 100,
-                'greedy_harvest_limit': 100,
-                'greedy_prefer_stay_factor': 10}}
-lim = {'ships': {'greedy_pheromone_weight': (0, 10),
-                'greedy_seek_limit': (1, 1000),
-                'greedy_harvest_limit': (1, 1000),
-                'greedy_prefer_stay_factor': (0, 10)}}
-dt = {'ships': {'greedy_pheromone_weight': float,
-                'greedy_seek_limit': int,
-                'greedy_harvest_limit': int,
-                'greedy_prefer_stay_factor': int}}
+mu = {'ships': {'seek_pheromone_cost': -2}}
+var = {'ships': {'seek_pheromone_cost': 1.0}}
+lim = {'ships': {'seek_pheromone_cost': (-np.inf, np.inf)}}
+trans = {'ships': {'seek_pheromone_cost': lambda x: -(10**x)}}
+inv = {'ships': {'seek_pheromone_cost': lambda y: np.log10(-y)}}
 
 maxvar = np.inf
 
@@ -65,10 +54,10 @@ while n_iter < 100 and maxvar > 1e-2:
                 x = np.random.randn() * np.sqrt(var[cat][val]) + mu[cat][val]
                 l = lim[cat][val]
                 x = np.clip(x, *l)
-                instance[cat][val] = dt[cat][val](x)
+                instance[cat][val] = trans[cat][val](x)
                 
         cfgfile = "tmpcfg.json"
-        with open(aifile, 'w') as f:
+        with open(cfgfile, 'w') as f:
             json.dump(instance, f)
             
         procs = [start_game(cfgfile) for i in range(parsize)]
@@ -86,7 +75,8 @@ while n_iter < 100 and maxvar > 1e-2:
     mv = 0
     for cat in mu.keys():
         for val in mu[cat].keys():
-            x = [instances[ii][cat][val] for ii in i]
+            x = np.array([instances[ii][cat][val] for ii in i])
+            x = inv[cat][val](x)
             
             mu[cat][val] = mu[cat][val] * (1-LEARNING_RATE) + LEARNING_RATE * np.mean(x)
             var[cat][val] = var[cat][val] * (1-LEARNING_RATE) + LEARNING_RATE * np.var(x)

@@ -98,6 +98,7 @@ pub struct GameState {
 
     collect_statistic: Vec<f64>,
     last_halite: usize,
+    total_spent: usize,
 
     pheromones: Vec<Vec<f64>>,
     pheromones_backbuffer: Vec<Vec<f64>>,
@@ -120,6 +121,7 @@ impl GameState {
             command_queue: vec![],
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
             last_halite: 5000,
+            total_spent: 0,
 
             pheromones: vec![vec![0.0; game.map.width]; game.map.height],
             pheromones_backbuffer: vec![vec![0.0; game.map.width]; game.map.height],
@@ -157,15 +159,19 @@ impl GameState {
         }
         //Log::log(&format!("Halite quartiles: {:?}", self.halite_percentiles));
 
-        if self.me().halite > self.last_halite {
+        /*if self.me().halite > self.last_halite {
             let diff =
                 (self.me().halite - self.last_halite) as f64 / self.me().ship_ids.len() as f64;
             self.collect_statistic.push(diff);
         } else {
             self.collect_statistic.push(0.0);
-        }
+        }*/
 
-        self.last_halite = self.me().halite;
+        let delta = (self.me().halite + self.total_spent - self.last_halite) as f64;
+        let nship = self.me().ship_ids.len() as f64;
+        self.collect_statistic.push(delta / nship);
+
+        self.last_halite = self.me().halite + self.total_spent;
 
         self.command_queue.clear();
     }
@@ -191,7 +197,7 @@ impl GameState {
 
         Game::end_turn(&self.command_queue);
 
-        if self.game.turn_number == self.game.constants.max_turns {
+        if self.game.turn_number >= self.game.constants.max_turns - 1 {
             Log::log(&format!("collection rate: {:?}", self.collect_statistic));
         }
     }
@@ -257,6 +263,8 @@ impl GameState {
 
         let cmd = self.get_ship_mut(id).make_dropoff();
         self.command_queue.push(cmd);
+
+        self.total_spent += self.game.constants.dropoff_cost;  // assuming the spawn is always successful (it should be...)
 
         self.avg_return_length = 0.0;
 
@@ -742,6 +750,7 @@ impl Commander {
         {
             let pos = state.me().shipyard.position;
             state.gns.notify_spawn(pos);
+            state.total_spent += state.game.constants.ship_cost;  // assuming the spawn is always successful (it should be...)
         }
 
         state.gns.solve_moves();
