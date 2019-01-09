@@ -28,15 +28,23 @@ config = json.load(open('../config.json'))
 
 LEARNING_RATE = 3e-1
 
-parsize = 4
-batchsize = 1000
-n_best = 100
+parsize = 5
+n_repeats = 4
+batchsize = 100
+n_best = 10
 
-mu = {'ships': {'seek_pheromone_cost': -2}}
-var = {'ships': {'seek_pheromone_cost': 1.0}}
-lim = {'ships': {'seek_pheromone_cost': (-np.inf, np.inf)}}
-trans = {'ships': {'seek_pheromone_cost': lambda x: -(10**x)}}
-inv = {'ships': {'seek_pheromone_cost': lambda y: np.log10(-y)}}
+mu = {'ships': {'greedy_move_cost_factor': 0.0,
+                'seek_greed_factor': 0.0,
+                'seek_return_cost_factor': 0.0,
+                'seek_pheromone_factor': 0.0}}
+var = {'ships': {'greedy_move_cost_factor': 1.0,
+                 'seek_greed_factor': 1.0,
+                 'seek_return_cost_factor': 1.0,
+                 'seek_pheromone_factor': 1.0}}
+
+#lim = {'ships': {'seek_pheromone_cost': (-np.inf, np.inf)}}
+#trans = {'ships': {'seek_pheromone_cost': lambda x: x}}
+#inv = {'ships': {'seek_pheromone_cost': lambda y: y}}
 
 maxvar = np.inf
 
@@ -52,21 +60,22 @@ while n_iter < 100 and maxvar > 1e-2:
         for cat in mu.keys():
             for val in mu[cat].keys():
                 x = np.random.randn() * np.sqrt(var[cat][val]) + mu[cat][val]
-                l = lim[cat][val]
-                x = np.clip(x, *l)
-                instance[cat][val] = trans[cat][val](x)
+                #l = lim[cat][val]
+                #x = np.clip(x, *l)
+                instance[cat][val] = x #trans[cat][val](x)
                 
         cfgfile = "tmpcfg.json"
         with open(cfgfile, 'w') as f:
             json.dump(instance, f)
-            
-        procs = [start_game(cfgfile) for i in range(parsize)]
+        
         mean_delta = 0
-        for proc in procs:
-            s0, s1 = get_game(proc)
-            mean_delta += s0 - s1
+        for _ in range(n_repeats):
+            procs = [start_game(cfgfile) for i in range(parsize)]
+            for proc in procs:
+                s0, s1 = get_game(proc)
+                mean_delta += s0 - s1
         instances.append(instance)
-        delta_score.append(mean_delta / len(procs))
+        delta_score.append(mean_delta / (parsize * n_repeats))
             
     i = np.argsort(delta_score)[-n_best:]
     
@@ -76,7 +85,7 @@ while n_iter < 100 and maxvar > 1e-2:
     for cat in mu.keys():
         for val in mu[cat].keys():
             x = np.array([instances[ii][cat][val] for ii in i])
-            x = inv[cat][val](x)
+            #x = inv[cat][val](x)
             
             mu[cat][val] = mu[cat][val] * (1-LEARNING_RATE) + LEARNING_RATE * np.mean(x)
             var[cat][val] = var[cat][val] * (1-LEARNING_RATE) + LEARNING_RATE * np.var(x)

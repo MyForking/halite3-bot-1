@@ -170,8 +170,12 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         if stuck_move(id, state) {return BtState::Running}
 
         let pos = state.get_ship(id).position;
-        let cap = state.get_ship(id).capacity();
+        let cap = state.get_ship(id).capacity() as f64;
         let cargo = state.get_ship(id).halite;
+
+        let mc = state.movement_cost(&pos) as f64;
+
+        let current_halite = state.game.map.at_position(&pos).halite as f64;
 
         let p0 = state.get_pheromone(pos);
         let pn = state.get_pheromone(pos.directional_offset(Direction::North));
@@ -179,27 +183,46 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         let pe = state.get_pheromone(pos.directional_offset(Direction::East));
         let pw = state.get_pheromone(pos.directional_offset(Direction::West));
 
-        let [r0, rn, rs, re, rw] = state.get_return_dir_costs(pos);
+        let g0 = state.halite_gain(&pos).min(cap as usize) as f64;
+        let gn = (state.halite_gain(&pos.directional_offset(Direction::North)) as f64 - mc).min(cap);
+        let gs = (state.halite_gain(&pos.directional_offset(Direction::South)) as f64 - mc).min(cap);
+        let ge = (state.halite_gain(&pos.directional_offset(Direction::East)) as f64 - mc).min(cap);
+        let gw = (state.halite_gain(&pos.directional_offset(Direction::West)) as f64 - mc).min(cap);
+
+        let h0 = sigmoid(current_halite * 1.0 - 50.0);
+        let hn = sigmoid(gn * 1.0 + mc * -1.0 + g0 * -2.0 + pn * 0.1);
+        let hs = sigmoid(gs * 1.0 + mc * -1.0 + g0 * -2.0 + ps * 0.1);
+        let he = sigmoid(ge * 1.0 + mc * -1.0 + g0 * -2.0 + pe * 0.1);
+        let hw = sigmoid(gw * 1.0 + mc * -1.0 + g0 * -2.0 + pw * 0.1);
+
+        // todo: cast all this (above & below) into a proper neural network structure... but let's first see if it works :)
+
+        let c0 = -(h0 * 10000.0) as i32;
+        let cn = -(hn * (1.0 - h0) * 10000.0) as i32;
+        let cs = -(hs * (1.0 - h0) * 10000.0) as i32;
+        let ce = -(he * (1.0 - h0) * 10000.0) as i32;
+        let cw = -(hw * (1.0 - h0) * 10000.0) as i32;
+
+        /*let [r0, rn, rs, re, rw] = state.get_return_dir_costs(pos);
         let rn = (rn - r0) as f64;
         let rs = (rs - r0) as f64;
         let re = (re - r0) as f64;
         let rw = (rw - r0) as f64;
 
-        let mc = state.movement_cost(&pos) as i32;
-
-        // todo: factor in neighboring halite deposits
-        //       return cost factor did not seem to have much effect
-
-        let cn = mc + ((pn - p0) * state.config.ships.seek_pheromone_cost + rn * state.config.ships.seek_return_cost_factor) as i32;
-        let cs = mc + ((ps - p0) * state.config.ships.seek_pheromone_cost + rs * state.config.ships.seek_return_cost_factor) as i32;
-        let ce = mc + ((pe - p0) * state.config.ships.seek_pheromone_cost + re * state.config.ships.seek_return_cost_factor) as i32;
-        let cw = mc + ((pw - p0) * state.config.ships.seek_pheromone_cost + rw * state.config.ships.seek_return_cost_factor) as i32;
-        let c0 = -(state.halite_gain(&pos).min(cap) as i32);
+        let c0 = (-g0 * state.config.ships.seek_greed_factor) as i32;
+        let cn = (mc as f64 * state.config.ships.greedy_move_cost_factor + (p0 - pn) * state.config.ships.seek_pheromone_factor - gn * state.config.ships.seek_greed_factor + rn * state.config.ships.seek_return_cost_factor) as i32;
+        let cs = (mc as f64 * state.config.ships.greedy_move_cost_factor + (p0 - ps) * state.config.ships.seek_pheromone_factor - gs * state.config.ships.seek_greed_factor + rs * state.config.ships.seek_return_cost_factor) as i32;
+        let ce = (mc as f64 * state.config.ships.greedy_move_cost_factor + (p0 - pe) * state.config.ships.seek_pheromone_factor - ge * state.config.ships.seek_greed_factor + re * state.config.ships.seek_return_cost_factor) as i32;
+        let cw = (mc as f64 * state.config.ships.greedy_move_cost_factor + (p0 - pw) * state.config.ships.seek_pheromone_factor - gw * state.config.ships.seek_greed_factor + rw * state.config.ships.seek_return_cost_factor) as i32;*/
 
         state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 
         BtState::Running
     })
+}
+
+fn sigmoid(x: f64) -> f64 {
+    1.0 / (1.0 + (-x).exp())
 }
 
 /*fn desperate(id: ShipId) -> Box<impl BtNode<GameState>> {

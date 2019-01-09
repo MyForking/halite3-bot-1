@@ -277,6 +277,7 @@ impl GameState {
 
     fn halite_gain(&self, pos: &Position) -> usize {
         // todo: add inspiration
+        // todo: round up?
         self.game.map.at_position(&pos).halite / self.game.constants.extract_ratio
     }
 

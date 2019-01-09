@@ -38,8 +38,10 @@ pub struct Ships {
     pub greedy_seek_limit: usize,
     pub greedy_pheromone_weight: f64,
 
+    pub greedy_move_cost_factor: f64,
+    pub seek_greed_factor: f64,
     pub seek_return_cost_factor: f64,
-    pub seek_pheromone_cost: f64,
+    pub seek_pheromone_factor: f64,
 }
 
 #[derive(Deserialize)]
