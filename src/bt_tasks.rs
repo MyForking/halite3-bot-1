@@ -191,9 +191,9 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         //       return cost factor did not seem to have much effect
 
         let cn = mc + ((pn - p0) * state.config.ships.seek_pheromone_cost + rn * state.config.ships.seek_return_cost_factor) as i32;
-        let cs = mc + ((ps - p0) * state.config.ships.seek_pheromone_cost + rn * state.config.ships.seek_return_cost_factor) as i32;
-        let ce = mc + ((pe - p0) * state.config.ships.seek_pheromone_cost + rn * state.config.ships.seek_return_cost_factor) as i32;
-        let cw = mc + ((pw - p0) * state.config.ships.seek_pheromone_cost + rn * state.config.ships.seek_return_cost_factor) as i32;
+        let cs = mc + ((ps - p0) * state.config.ships.seek_pheromone_cost + rs * state.config.ships.seek_return_cost_factor) as i32;
+        let ce = mc + ((pe - p0) * state.config.ships.seek_pheromone_cost + re * state.config.ships.seek_return_cost_factor) as i32;
+        let cw = mc + ((pw - p0) * state.config.ships.seek_pheromone_cost + rw * state.config.ships.seek_return_cost_factor) as i32;
         let c0 = -(state.halite_gain(&pos).min(cap) as i32);
 
         state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
