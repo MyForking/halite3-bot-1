@@ -12,8 +12,12 @@
   },
 
   "pheromones": {
-    "evaporation_rate": 0.99,
-    "diffusion_rate": 0.2
+    "evaporation_rate": 1.0,
+    "diffusion_coefficient": 10,
+    "decay_rate": 0.25,
+    "ship_absorbtion": 0.15,
+    "time_step": 0.02,
+    "n_steps": 50
   },
 
   "ships": {

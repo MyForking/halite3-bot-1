@@ -28,7 +28,11 @@ pub struct Navigation {
 #[derive(Deserialize)]
 pub struct Pheromones {
     pub evaporation_rate: f64,
-    pub diffusion_rate: f64,
+    pub diffusion_coefficient: f64,
+    pub decay_rate: f64,
+    pub ship_absorbtion: f64,
+    pub time_step: f64,
+    pub n_steps: usize,
 }
 
 #[derive(Deserialize)]

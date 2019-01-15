@@ -1,7 +1,9 @@
 use behavior_tree::{interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState};
 use hlt::direction::Direction;
+use hlt::log::Log;
 use hlt::ShipId;
 use GameState;
+use std::f64;
 
 fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
     let mut turns_taken = 0;
@@ -21,8 +23,8 @@ fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
             state.move_ship_or_wait(id, d);
         }
 
-        let cargo = state.get_ship(id).halite;
-        state.add_pheromone(pos, cargo as f64);
+        /*let cargo = state.get_ship(id).halite;
+        state.add_pheromone(pos, cargo as f64);*/
 
         turns_taken += 1;
 
@@ -117,6 +119,10 @@ fn find_desperate(id: ShipId) -> Box<impl BtNode<GameState>> {
     })
 }
 
+fn sigmoid(x: f64) -> f64 {
+    1.0 / (1.0 + (-x).exp())
+}
+
 fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
         if state.get_ship(id).is_full() {
@@ -140,8 +146,83 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         let current_halite = state.game.map.at_position(&pos).halite;
         let current_value = current_halite / state.game.constants.extract_ratio;
+        let phi0 = state.get_pheromone(pos);
 
-        if current_halite >= state.config.ships.greedy_harvest_limit {
+        Log::log(&format!("{:?}", id));
+        Log::log(&format!("    @ {:?}: {} halite; {} pheromone", pos, current_halite, phi0));
+
+        /*let (d, h) = Direction::get_all_cardinals().into_iter()
+            .map(|d| (d, pos.directional_offset(d)))
+            .map(|(d, p)| {
+                let target_halite = state.game.map.at_position(&p).halite;
+                let phi = state.get_pheromone(p);
+                let bias = 50.min(state.halite_percentiles[75]);
+                let x = if p == syp || state.navi.is_unsafe(&p) {
+                    -f64::INFINITY
+                } else {
+                    0.1 * (- 1.0 * current_halite as f64 + 0.15 * target_halite as f64 + phi * 0.01)
+                };
+                Log::log(&format!("    - {:?}: {} ... {} halite; {} pheromone", p, x, target_halite, phi));
+                (d, x)
+            })
+            .map(|(d, x)| (d, sigmoid(x)))
+            .inspect(|x| Log::log(&format!("{:?}", x)))
+            .max_by(|&(_, activation1), &(_, activation2)|
+            if activation1 < activation2 {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Greater
+            })
+            .unwrap();
+
+        let h0 = 1.0 - h;
+
+        if h0 >= h {
+            state.move_ship(id, Direction::Still);
+            return BtState::Running;
+        } else {
+            state.move_ship(id, d);
+            return BtState::Running;
+        }*/
+
+        let mut weights: Vec<_> = if cargo < movement_cost {
+                vec![f64::INFINITY, 0.0, 0.0, 0.0, 0.0]
+            } else {
+                Direction::get_all_options().into_iter()
+                    .map(|d| pos.directional_offset(d))
+                    .map(|p| if state.navi.is_unsafe(&p) || p == syp { 0.0 } else { state.get_pheromone(p) })
+                    .collect()
+            };
+
+        if current_halite > state.config.ships.greedy_harvest_limit {
+            weights[4] = 1000.0 + current_halite as f64;
+        } else if current_halite as f64 > phi0 {
+            weights[4] = current_halite as f64;
+        }
+
+        Log::log(&format!("    {:?}", weights));
+
+        let dir = weights.iter().enumerate()
+            .max_by(|&(_, a), &(_, b)|
+                if a <= b {
+                    std::cmp::Ordering::Less
+                } else {
+                    std::cmp::Ordering::Greater
+                })
+            .map(|(i, _)| match i {
+                0 => Direction::West,
+                1 => Direction::East,
+                2 => Direction::North,
+                3 => Direction::South,
+                4 => Direction::Still,
+                _ => unreachable!(),
+            }).unwrap();
+
+        state.move_ship(id, dir);
+
+        BtState::Running
+
+        /*if current_halite >= state.config.ships.greedy_harvest_limit {
             state.move_ship(id, Direction::Still);
             return BtState::Running;
         }
@@ -184,6 +265,7 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         state.move_ship(id, d);
 
         BtState::Running
+        */
     })
 }
 
