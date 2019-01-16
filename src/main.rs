@@ -734,7 +734,9 @@ impl Commander {
 
             let predicted_profit = avg_collected * state.rounds_left() as f64;
 
-            predicted_profit as usize > state.game.constants.ship_cost * 2 // safety factor...
+            let a = predicted_profit as usize > state.game.constants.ship_cost * 2; // safety factor...
+            let b = state.rounds_left() > 100;
+            a && b
         } else {
             true
         };
