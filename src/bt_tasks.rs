@@ -1,6 +1,7 @@
 use behavior_tree::{continuous, interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState};
 use hlt::direction::Direction;
 use hlt::log::Log;
+use hlt::map_cell::Structure;
 use hlt::ShipId;
 use GameState;
 use std::f64;
@@ -175,6 +176,8 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         let cap = state.get_ship(id).capacity() as f64;
         let cargo = state.get_ship(id).halite;
 
+        let syp = state.me().shipyard.position;
+
         let mc = state.movement_cost(&pos);
 
         let current_halite = state.game.map.at_position(&pos).halite;
@@ -227,7 +230,9 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
                     .collect()
             };
 
-        if current_halite > state.config.ships.greedy_harvest_limit {
+        if state.game.map.at_position(&pos).structure != Structure::None {
+            weights[4] = -9999999.0;  // no loitering at the shipyard
+        } else if current_halite > state.config.ships.greedy_harvest_limit {
             weights[4] = 1000.0 + current_halite as f64;
         } else if current_halite as f64 > phi0 {
             weights[4] = current_halite as f64;
