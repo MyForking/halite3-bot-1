@@ -87,7 +87,10 @@ impl NavigationSystem {
         let pe = self.pos(pos.directional_offset(Direction::East));
         let pw = self.pos(pos.directional_offset(Direction::West));
 
-        Log::log(&format!("planned move {:?} @ {:?}: {:?}, {:?}, {:?}, {:?}, {:?}", id, p0, stay_cost, n_cost, s_cost, e_cost, w_cost));
+        Log::log(&format!(
+            "planned move {:?} @ {:?}: {:?}, {:?}, {:?}, {:?}, {:?}",
+            id, p0, stay_cost, n_cost, s_cost, e_cost, w_cost
+        ));
         //Log::log(&format!("{:?}", self.positions));
 
         self.ships.insert(
@@ -124,7 +127,6 @@ impl NavigationSystem {
     }
 
     pub fn solve_moves(&mut self) {
-
         let mut rows = Vec::new();
         let mut actors = Vec::new();
         for (&actor, &row) in self.ships.iter() {
@@ -154,16 +156,22 @@ impl NavigationSystem {
             .iter()
             .zip(&assignments)
             .inspect(|((actor, pc), i)| {
-                Log::log(&format!("{:?} {:?} -> {:?}", actor, pc, self.positions[**i]));
+                Log::log(&format!(
+                    "{:?} {:?} -> {:?}",
+                    actor, pc, self.positions[**i]
+                ));
             })
             .map(|((actor, pc), &i)| match actor {
-                &Actor::Ship(id) => Action::Move(id, self.positions[i]
-                    .relative_to(
-                        self.positions[pc[0].0],
-                        self.map_width as i32,
-                        self.map_height as i32,
-                    )
-                    .unwrap()),
+                &Actor::Ship(id) => Action::Move(
+                    id,
+                    self.positions[i]
+                        .relative_to(
+                            self.positions[pc[0].0],
+                            self.map_width as i32,
+                            self.map_height as i32,
+                        )
+                        .unwrap(),
+                ),
                 Actor::Shipyard => Action::Spawn,
             })
             .collect();

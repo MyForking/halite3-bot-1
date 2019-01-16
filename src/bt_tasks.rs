@@ -1,21 +1,31 @@
-use behavior_tree::{continuous, interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState};
+use behavior_tree::{
+    continuous, interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState,
+};
 use hlt::direction::Direction;
 use hlt::log::Log;
 use hlt::map_cell::Structure;
 use hlt::ShipId;
-use GameState;
 use std::f64;
+use GameState;
 
 fn stuck_move(id: ShipId, state: &mut GameState) -> bool {
     let pos = state.get_ship(id).position;
     let cargo = state.get_ship(id).halite;
     let cap = state.get_ship(id).capacity();
 
-    let harvest = state.config.navigation.return_step_cost as i32
-        - state.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
+    let harvest =
+        state.config.navigation.return_step_cost as i32 - state.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
 
     if state.movement_cost(&pos) > cargo {
-        state.gns.plan_move(id, pos, harvest, i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value());
+        state.gns.plan_move(
+            id,
+            pos,
+            harvest,
+            i32::max_value(),
+            i32::max_value(),
+            i32::max_value(),
+            i32::max_value(),
+        );
         true
     } else {
         false
@@ -60,7 +70,9 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
         let pos = state.get_ship(id).position;
         let cargo = state.get_ship(id).halite;
 
-        if stuck_move(id, state) {return BtState::Running}
+        if stuck_move(id, state) {
+            return BtState::Running;
+        }
 
         for d in Direction::get_all_cardinals() {
             if state
@@ -170,7 +182,9 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
             return BtState::Success;
         }
 
-        if stuck_move(id, state) {return BtState::Running}
+        if stuck_move(id, state) {
+            return BtState::Running;
+        }
 
         let pos = state.get_ship(id).position;
         let cap = state.get_ship(id).capacity() as f64;
@@ -180,11 +194,14 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         let mc = state.movement_cost(&pos);
 
-        let current_halite = state.halite_gain(&pos) * state.game.constants.extract_ratio;  // factor inspiration into current_halite
+        let current_halite = state.halite_gain(&pos) * state.game.constants.extract_ratio; // factor inspiration into current_halite
         let phi0 = state.get_pheromone(pos);
 
         Log::log(&format!("{:?}", id));
-        Log::log(&format!("    @ {:?}: {} halite; {} pheromone", pos, current_halite, phi0));
+        Log::log(&format!(
+            "    @ {:?}: {} halite; {} pheromone",
+            pos, current_halite, phi0
+        ));
 
         /*let (d, h) = Direction::get_all_cardinals().into_iter()
             .map(|d| (d, pos.directional_offset(d)))
@@ -221,16 +238,17 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         }*/
 
         let mut weights: Vec<_> = if cargo < mc {
-                vec![9999999.0, 0.0, 0.0, 0.0, 0.0]
-            } else {
-                Direction::get_all_options().into_iter()
-                    .map(|d| pos.directional_offset(d))
-                    .map(|p| state.get_pheromone(p))
-                    .collect()
-            };
+            vec![9999999.0, 0.0, 0.0, 0.0, 0.0]
+        } else {
+            Direction::get_all_options()
+                .into_iter()
+                .map(|d| pos.directional_offset(d))
+                .map(|p| state.get_pheromone(p))
+                .collect()
+        };
 
         if state.game.map.at_position(&pos).structure != Structure::None {
-            weights[4] = -9999999.0;  // no loitering at the shipyard
+            weights[4] = -9999999.0; // no loitering at the shipyard
         } else if current_halite > state.config.ships.greedy_harvest_limit {
             weights[4] = 1000.0 + current_halite as f64;
         } else if current_halite as f64 > phi0 {
@@ -239,7 +257,15 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         Log::log(&format!("    {:?}", weights));
 
-        state.gns.plan_move(id, pos, -(weights[4] * 100.0) as i32, -(weights[2] * 100.0) as i32, -(weights[3] * 100.0) as i32, -(weights[1] * 100.0) as i32, -(weights[0] * 100.0) as i32);
+        state.gns.plan_move(
+            id,
+            pos,
+            -(weights[4] * 100.0) as i32,
+            -(weights[2] * 100.0) as i32,
+            -(weights[3] * 100.0) as i32,
+            -(weights[1] * 100.0) as i32,
+            -(weights[0] * 100.0) as i32,
+        );
 
         BtState::Running
     })
@@ -295,8 +321,7 @@ pub fn build_dropoff(id: ShipId) -> Box<impl BtNode<GameState>> {
 }
 
 pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
-    continuous(
-    select(vec![
+    continuous(select(vec![
         interrupt(
             select(vec![
                 sequence(vec![greedy(id), deliver(id)]),

@@ -32,30 +32,6 @@ mod config;
 mod hlt;
 mod navigation_system;
 
-/*#[derive(Debug, Eq, PartialEq)]
-struct DijkstraMaxNode<C: Ord, T: Eq> {
-    cost: C,
-    data: T,
-}
-
-impl<C: Ord, T: Eq> std::cmp::PartialOrd for DijkstraMaxNode<C, T> {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.cost.partial_cmp(&other.cost)
-    }
-}
-
-impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraMaxNode<C, T> {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.cost.cmp(&other.cost)
-    }
-}
-
-impl<C: Ord, T: Eq> DijkstraMaxNode<C, T> {
-    fn new(cost: C, data: T) -> Self {
-        DijkstraMaxNode { cost, data }
-    }
-}*/
-
 #[derive(Debug, Eq, PartialEq)]
 struct DijkstraMinNode<C: Ord, T: Eq> {
     cost: C,
@@ -264,7 +240,7 @@ impl GameState {
         let cmd = self.get_ship_mut(id).make_dropoff();
         self.command_queue.push(cmd);
 
-        self.total_spent += self.game.constants.dropoff_cost;  // assuming the spawn is always successful (it should be...)
+        self.total_spent += self.game.constants.dropoff_cost; // assuming the spawn is always successful (it should be...)
 
         self.avg_return_length = 0.0;
 
@@ -276,10 +252,14 @@ impl GameState {
     }
 
     fn halite_gain(&self, pos: &Position) -> usize {
-        let inspired = self.game.ships.values()
+        let inspired = self
+            .game
+            .ships
+            .values()
             .filter(|ship| ship.owner != self.me().id)
             .filter(|ship| self.game.map.calculate_distance(pos, &ship.position) <= 4)
-            .count() >= 2;
+            .count()
+            >= 2;
 
         // todo: round up?
         let gain = self.game.map.at_position(&pos).halite / self.game.constants.extract_ratio;
@@ -295,40 +275,6 @@ impl GameState {
         let ship = self.get_ship(id);
         ship.halite >= self.movement_cost(&ship.position)
     }
-
-    /*fn move_ship(&mut self, id: ShipId, mut d: Direction) {
-        if self.can_move(id) {
-            let p0 = self.get_ship(id).position;
-            let p1 = p0.directional_offset(d);
-            self.navi.mark_safe(&p0);
-            self.navi.mark_unsafe(&p1, id);
-        } else {
-            d = Direction::Still;
-        }
-        self.get_ship_mut(id).move_ship(d);
-    }
-
-    fn try_move_ship(&mut self, id: ShipId, d: Direction) -> bool {
-        if !self.can_move(id) {
-            return false;
-        }
-        let p0 = self.get_ship(id).position;
-        let p1 = p0.directional_offset(d);
-        if self.navi.is_safe(&p1) {
-            self.navi.mark_safe(&p0);
-            self.navi.mark_unsafe(&p1, id);
-            self.get_ship_mut(id).move_ship(d);
-            true
-        } else {
-            false
-        }
-    }
-
-    fn move_ship_or_wait(&mut self, id: ShipId, d: Direction) {
-        if !self.try_move_ship(id, d) {
-            //self.get_ship_mut(id).move_ship(Direction::Still);
-        }
-    }*/
 
     fn get_nearest_halite_move(&self, start: Position, min_halite: usize) -> Option<Direction> {
         let mut queue = VecDeque::new();
@@ -359,56 +305,6 @@ impl GameState {
         }
         None
     }
-
-    /*fn get_dijkstra_path(&self, start: Position, dest: Position) -> Vec<Direction> {
-        const STEP_COST: i64 = 1; // fixed cost of one step - tweak to prefer shorter paths
-
-        let mut visited = HashSet::new();
-
-        let mut queue = BinaryHeap::new();
-        queue.push(DijkstraMaxNode::new(0, (start, vec![])));
-
-        let maxlen = ((start.x - dest.x).abs() + (start.y - dest.y).abs()).max(5) * 2; // todo: tweak me
-
-        while let Some(node) = queue.pop() {
-            let (mut pos, path) = node.data;
-            pos = self.game.map.normalize(&pos);
-
-            if path.len() > maxlen as usize {
-                continue;
-            }
-
-            if pos == dest {
-                return path;
-            }
-
-            if visited.contains(&pos) {
-                continue;
-            }
-            visited.insert(pos);
-
-            let movement_cost =
-                self.game.map.at_position(&pos).halite / self.game.constants.move_cost_ratio;
-
-            for d in Direction::get_all_cardinals() {
-                let p = pos.directional_offset(d);
-                if !self.navi.is_safe(&p) && p != dest {
-                    continue;
-                }
-                // keep one path open
-                if p.x == dest.x + 1 && p.y == dest.y {
-                    continue;
-                }
-                let mut newpath = path.clone();
-                newpath.push(d);
-                queue.push(DijkstraMaxNode::new(
-                    node.cost as i64 - movement_cost as i64 - STEP_COST,
-                    (p, newpath),
-                ));
-            }
-        }
-        vec![]
-    }*/
 
     fn get_return_dir(&self, pos: Position) -> Direction {
         self.return_map_directions[pos.y as usize][pos.x as usize]
@@ -537,29 +433,6 @@ impl GameState {
         }
     }
 
-    /*fn push(&mut self, pos: Position) {
-        let id = if let Some(id) = self
-            .my_ships()
-            .find(|&id| self.get_ship(id).position == pos)
-        {
-            id
-        } else {
-            return;
-        };
-
-        Log::log(&format!("pushing {:?}", pos));
-
-        if Direction::get_all_cardinals()
-            .into_iter()
-            .any(|d| self.try_move_ship(id, d))
-        {
-            return;
-        }
-
-        self.push(pos.directional_offset(Direction::West));
-        self.try_move_ship(id, Direction::West);
-    }*/
-
     fn update_pheromones(&mut self) {
         let w = self.game.map.width;
         let h = self.game.map.height;
@@ -570,13 +443,19 @@ impl GameState {
             for i in 0..h {
                 for j in 0..w {
                     let phi0 = self.pheromones[i][j];
-                    let mut dphi = (self.pheromones[(i - 1) % h][j] + self.pheromones[(i + 1) % h][j] + self.pheromones[i][(j - 1) % w] + self.pheromones[i][(j + 1) % w] - phi0 * 4.0) * self.config.pheromones.diffusion_coefficient;
+                    let mut dphi = (self.pheromones[(i - 1) % h][j]
+                        + self.pheromones[(i + 1) % h][j]
+                        + self.pheromones[i][(j - 1) % w]
+                        + self.pheromones[i][(j + 1) % w]
+                        - phi0 * 4.0)
+                        * self.config.pheromones.diffusion_coefficient;
 
                     dphi -= phi0 * self.config.pheromones.decay_rate;
 
                     dphi += (self.game.map.cells[i][j].halite as f64 - phi0).max(0.0);
 
-                    self.pheromones_backbuffer[i][j] = phi0 + dphi * self.config.pheromones.time_step;
+                    self.pheromones_backbuffer[i][j] =
+                        phi0 + dphi * self.config.pheromones.time_step;
                 }
             }
 
@@ -589,7 +468,8 @@ impl GameState {
 
                 let dphi = (phi0 - cap).min(0.0) * self.config.pheromones.ship_absorbtion;
 
-                self.pheromones_backbuffer[p.y as usize][p.x as usize] += dphi * self.config.pheromones.time_step;
+                self.pheromones_backbuffer[p.y as usize][p.x as usize] +=
+                    dphi * self.config.pheromones.time_step;
             }
 
             std::mem::swap(&mut self.pheromones, &mut self.pheromones_backbuffer);
@@ -761,7 +641,7 @@ impl Commander {
         {
             let pos = state.me().shipyard.position;
             state.gns.notify_spawn(pos);
-            state.total_spent += state.game.constants.ship_cost;  // assuming the spawn is always successful (it should be...)
+            state.total_spent += state.game.constants.ship_cost; // assuming the spawn is always successful (it should be...)
         }
 
         state.gns.solve_moves();

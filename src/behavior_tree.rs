@@ -29,8 +29,8 @@ pub fn lambda<E, F: FnMut(&mut E) -> BtState>(func: F) -> Box<impl BtNode<E>> {
 }*/
 
 pub fn continuous<E>(mut child: NodePtr<E>) -> Box<impl BtNode<E>> {
-    lambda(move|state|{
-        while child.tick(state) != BtState::Running { }
+    lambda(move |state| {
+        while child.tick(state) != BtState::Running {}
         BtState::Running
     })
 }
