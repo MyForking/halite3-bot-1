@@ -235,7 +235,7 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         Log::log(&format!("    {:?}", weights));
 
-        state.gns.plan_move(id, pos, -weights[4] as i32, -weights[2] as i32, -weights[3] as i32, -weights[1] as i32, -weights[0] as i32);
+        state.gns.plan_move(id, pos, -(weights[4] * 100.0) as i32, -(weights[2] * 100.0) as i32, -(weights[3] * 100.0) as i32, -(weights[1] * 100.0) as i32, -(weights[0] * 100.0) as i32);
 
         BtState::Running
     })
