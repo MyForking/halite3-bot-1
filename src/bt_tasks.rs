@@ -1,7 +1,9 @@
 use behavior_tree::{continuous, interrupt, lambda, run_or_fail, select, sequence, BtNode, BtState};
 use hlt::direction::Direction;
+use hlt::log::Log;
 use hlt::ShipId;
 use GameState;
+use std::f64;
 
 fn stuck_move(id: ShipId, state: &mut GameState) -> bool {
     let pos = state.get_ship(id).position;
@@ -44,7 +46,7 @@ fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
             state.gns.plan_move(id, pos, harvest, cn, cs, ce, cw);
         }
 
-        state.add_pheromone(pos, cargo as f64);
+        //state.add_pheromone(pos, cargo as f64);
 
         turns_taken += 1;
 
@@ -173,49 +175,67 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         let cap = state.get_ship(id).capacity() as f64;
         let cargo = state.get_ship(id).halite;
 
-        let mc = state.movement_cost(&pos) as f64;
+        let mc = state.movement_cost(&pos);
 
-        let current_halite = state.game.map.at_position(&pos).halite as f64;
+        let current_halite = state.game.map.at_position(&pos).halite;
+        let current_value = current_halite / state.game.constants.extract_ratio;
+        let phi0 = state.get_pheromone(pos);
 
-        let p0 = state.get_pheromone(pos);
-        let pn = state.get_pheromone(pos.directional_offset(Direction::North));
-        let ps = state.get_pheromone(pos.directional_offset(Direction::South));
-        let pe = state.get_pheromone(pos.directional_offset(Direction::East));
-        let pw = state.get_pheromone(pos.directional_offset(Direction::West));
+        Log::log(&format!("{:?}", id));
+        Log::log(&format!("    @ {:?}: {} halite; {} pheromone", pos, current_halite, phi0));
 
-        let g0 = state.halite_gain(&pos).min(cap as usize) as f64;
-        let gn = (state.halite_gain(&pos.directional_offset(Direction::North)) as f64 - mc).min(cap);
-        let gs = (state.halite_gain(&pos.directional_offset(Direction::South)) as f64 - mc).min(cap);
-        let ge = (state.halite_gain(&pos.directional_offset(Direction::East)) as f64 - mc).min(cap);
-        let gw = (state.halite_gain(&pos.directional_offset(Direction::West)) as f64 - mc).min(cap);
+        /*let (d, h) = Direction::get_all_cardinals().into_iter()
+            .map(|d| (d, pos.directional_offset(d)))
+            .map(|(d, p)| {
+                let target_halite = state.game.map.at_position(&p).halite;
+                let phi = state.get_pheromone(p);
+                let bias = 50.min(state.halite_percentiles[75]);
+                let x = if p == syp || state.navi.is_unsafe(&p) {
+                    -f64::INFINITY
+                } else {
+                    0.1 * (- 1.0 * current_halite as f64 + 0.15 * target_halite as f64 + phi * 0.01)
+                };
+                Log::log(&format!("    - {:?}: {} ... {} halite; {} pheromone", p, x, target_halite, phi));
+                (d, x)
+            })
+            .map(|(d, x)| (d, sigmoid(x)))
+            .inspect(|x| Log::log(&format!("{:?}", x)))
+            .max_by(|&(_, activation1), &(_, activation2)|
+            if activation1 < activation2 {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Greater
+            })
+            .unwrap();
 
-        let h0 = sigmoid(current_halite * 1.0 - 50.0);
-        let hn = sigmoid(gn * 1.0 + mc * -1.0 + g0 * -2.0 + pn * 0.1);
-        let hs = sigmoid(gs * 1.0 + mc * -1.0 + g0 * -2.0 + ps * 0.1);
-        let he = sigmoid(ge * 1.0 + mc * -1.0 + g0 * -2.0 + pe * 0.1);
-        let hw = sigmoid(gw * 1.0 + mc * -1.0 + g0 * -2.0 + pw * 0.1);
+        let h0 = 1.0 - h;
 
-        // todo: cast all this (above & below) into a proper neural network structure... but let's first see if it works :)
+        if h0 >= h {
+            state.move_ship(id, Direction::Still);
+            return BtState::Running;
+        } else {
+            state.move_ship(id, d);
+            return BtState::Running;
+        }*/
 
-        let c0 = -(h0 * 10000.0) as i32;
-        let cn = -(hn * (1.0 - h0) * 10000.0) as i32;
-        let cs = -(hs * (1.0 - h0) * 10000.0) as i32;
-        let ce = -(he * (1.0 - h0) * 10000.0) as i32;
-        let cw = -(hw * (1.0 - h0) * 10000.0) as i32;
+        let mut weights: Vec<_> = if cargo < mc {
+                vec![9999999.0, 0.0, 0.0, 0.0, 0.0]
+            } else {
+                Direction::get_all_options().into_iter()
+                    .map(|d| pos.directional_offset(d))
+                    .map(|p| state.get_pheromone(p))
+                    .collect()
+            };
 
-        /*let [r0, rn, rs, re, rw] = state.get_return_dir_costs(pos);
-        let rn = (rn - r0) as f64;
-        let rs = (rs - r0) as f64;
-        let re = (re - r0) as f64;
-        let rw = (rw - r0) as f64;
+        if current_halite > state.config.ships.greedy_harvest_limit {
+            weights[4] = 1000.0 + current_halite as f64;
+        } else if current_halite as f64 > phi0 {
+            weights[4] = current_halite as f64;
+        }
 
-        let c0 = (-g0 * state.config.ships.seek_greed_factor) as i32;
-        let cn = (mc as f64 * state.config.ships.greedy_move_cost_factor + (p0 - pn) * state.config.ships.seek_pheromone_factor - gn * state.config.ships.seek_greed_factor + rn * state.config.ships.seek_return_cost_factor) as i32;
-        let cs = (mc as f64 * state.config.ships.greedy_move_cost_factor + (p0 - ps) * state.config.ships.seek_pheromone_factor - gs * state.config.ships.seek_greed_factor + rs * state.config.ships.seek_return_cost_factor) as i32;
-        let ce = (mc as f64 * state.config.ships.greedy_move_cost_factor + (p0 - pe) * state.config.ships.seek_pheromone_factor - ge * state.config.ships.seek_greed_factor + re * state.config.ships.seek_return_cost_factor) as i32;
-        let cw = (mc as f64 * state.config.ships.greedy_move_cost_factor + (p0 - pw) * state.config.ships.seek_pheromone_factor - gw * state.config.ships.seek_greed_factor + rw * state.config.ships.seek_return_cost_factor) as i32;*/
+        Log::log(&format!("    {:?}", weights));
 
-        state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
+        state.gns.plan_move(id, pos, -weights[4] as i32, -weights[2] as i32, -weights[3] as i32, -weights[1] as i32, -weights[0] as i32);
 
         BtState::Running
     })

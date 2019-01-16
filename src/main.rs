@@ -157,7 +157,7 @@ impl GameState {
         for i in 0..=100 {
             self.halite_percentiles[i] = map_halite[(n * i) / 100];
         }
-        //Log::log(&format!("Halite quartiles: {:?}", self.halite_percentiles));
+        Log::log(&format!("Halite quartiles: {:?}", self.halite_percentiles));
 
         /*if self.me().halite > self.last_halite {
             let diff =
@@ -554,45 +554,43 @@ impl GameState {
         let w = self.game.map.width;
         let h = self.game.map.height;
 
-        for i in 0..h {
-            for j in 0..w {
-                self.pheromones_backbuffer[i][j] = (self.game.map.cells[i][j].halite as f64
-                    + self.pheromones[i][j])
-                    * self.config.pheromones.evaporation_rate;
+        let ids: Vec<_> = self.my_ships().collect();
+
+        for _ in 0..self.config.pheromones.n_steps {
+            for i in 0..h {
+                for j in 0..w {
+                    let phi0 = self.pheromones[i][j];
+                    let mut dphi = (self.pheromones[(i - 1) % h][j] + self.pheromones[(i + 1) % h][j] + self.pheromones[i][(j - 1) % w] + self.pheromones[i][(j + 1) % w] - phi0 * 4.0) * self.config.pheromones.diffusion_coefficient;
+
+                    dphi -= phi0 * self.config.pheromones.decay_rate;
+
+                    dphi += (self.game.map.cells[i][j].halite as f64 - phi0).max(0.0);
+
+                    self.pheromones_backbuffer[i][j] = phi0 + dphi * self.config.pheromones.time_step;
+                }
             }
-        }
 
-        for i in 0..h {
-            for j in 0..w {
-                let dy = (self.pheromones[(i + 1) % h][j] - self.pheromones[i][j])
-                    * self.config.pheromones.diffusion_rate;
-                let dx = (self.pheromones[i][(j + 1) % w] - self.pheromones[i][j])
-                    * self.config.pheromones.diffusion_rate;
+            for id in &ids {
+                let (p, cap) = {
+                    let ship = self.get_ship(*id);
+                    (ship.position, ship.capacity() as f64)
+                };
+                let phi0 = self.pheromones[p.y as usize][p.x as usize];
 
-                self.pheromones_backbuffer[(i + 1) % h][j] -= dy;
-                self.pheromones_backbuffer[i][(j + 1) % w] -= dx;
+                let dphi = (phi0 - cap).min(0.0) * self.config.pheromones.ship_absorbtion;
 
-                self.pheromones_backbuffer[i][j] += dx + dy;
+                self.pheromones_backbuffer[p.y as usize][p.x as usize] += dphi * self.config.pheromones.time_step;
             }
-        }
 
-        // ships absorb pheromones to avoid balling up
-        for id in self.me().ship_ids.clone().into_iter() {
-            let pos = self.get_ship(id).position;
-            let cap = self.get_ship(id).capacity();
-            let (i, j) = (pos.y as usize, pos.x as usize);
-            self.pheromones_backbuffer[i][j] =
-                (self.pheromones_backbuffer[i][j] - cap as f64).max(0.0);
+            std::mem::swap(&mut self.pheromones, &mut self.pheromones_backbuffer);
         }
-
-        std::mem::swap(&mut self.pheromones, &mut self.pheromones_backbuffer);
     }
 
-    fn add_pheromone(&mut self, pos: Position, amount: f64) {
+    /*fn add_pheromone(&mut self, pos: Position, amount: f64) {
         let pos = self.game.map.normalize(&pos);
         let (i, j) = (pos.y as usize, pos.x as usize);
         self.pheromones[i][j] += amount;
-    }
+    }*/
 
     fn get_pheromone(&self, pos: Position) -> f64 {
         let pos = self.game.map.normalize(&pos);
