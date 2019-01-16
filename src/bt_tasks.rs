@@ -180,8 +180,7 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         let mc = state.movement_cost(&pos);
 
-        let current_halite = state.game.map.at_position(&pos).halite;
-        let current_value = current_halite / state.game.constants.extract_ratio;
+        let current_halite = state.halite_gain(&pos) * state.game.constants.extract_ratio;  // factor inspiration into current_halite
         let phi0 = state.get_pheromone(pos);
 
         Log::log(&format!("{:?}", id));

@@ -276,9 +276,19 @@ impl GameState {
     }
 
     fn halite_gain(&self, pos: &Position) -> usize {
-        // todo: add inspiration
+        let inspired = self.game.ships.values()
+            .filter(|ship| ship.owner != self.me().id)
+            .filter(|ship| self.game.map.calculate_distance(pos, &ship.position) <= 4)
+            .count() >= 2;
+
         // todo: round up?
-        self.game.map.at_position(&pos).halite / self.game.constants.extract_ratio
+        let gain = self.game.map.at_position(&pos).halite / self.game.constants.extract_ratio;
+
+        if inspired {
+            gain * 3
+        } else {
+            gain
+        }
     }
 
     fn can_move(&self, id: ShipId) -> bool {
