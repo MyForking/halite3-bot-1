@@ -16,7 +16,7 @@ def run_game(bot1, bot2, s):
 if __name__ == '__main__':
 
     bot1 = './target/release/my_bot'
-    bot2 = './old_bots/v13'
+    bot2 = './old_bots/v16 -c old_bots/v16.cfg.json'
 
     bot1, bot2 = bot1, bot2
 
@@ -24,19 +24,20 @@ if __name__ == '__main__':
 
     n = 100
 
-    scores = []
-    for _ in ProgressBar()(range(n//2)):
-        scores.append(run_game(bot1, bot2, s))
-        scores.append(run_game(bot2, bot1, s)[::-1])
+    scores_list = []
+    for k in ProgressBar()(range(n//2)):
+        scores_list.append(run_game(bot1, bot2, s))
+        scores_list.append(run_game(bot2, bot1, s)[::-1])
 
-    scores = np.transpose(scores).T
-    print(bot1, 'vs', bot2)
-    print(np.mean(scores, axis=0))
-    print(np.std(scores, axis=0))
+        if (k + 1) % 10 == 0:
+            scores = np.transpose(scores_list).T
+            print(bot1, 'vs', bot2)
+            print(np.mean(scores, axis=0))
+            print(np.std(scores, axis=0))
 
-    print(np.median(scores[:, 0] - scores[:, 1]))
-    print(np.mean(scores[:, 0] - scores[:, 1]))
-    print(np.std(scores[:, 0] - scores[:, 1]))
+            print(np.median(scores[:, 0] - scores[:, 1]))
+            print(np.mean(scores[:, 0] - scores[:, 1]))
+            print(np.std(scores[:, 0] - scores[:, 1]))
 
     plt.hist(scores[:, 0] - scores[:, 1], int(np.sqrt(n)))
     plt.show()
