@@ -248,7 +248,14 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
                 .collect()
         };
 
-        if state.game.map.at_position(&pos).structure != Structure::None {
+        if current_halite < 1 && weights[0] < 1.0 && weights[1] < 1.0 && weights[2] < 1.0 && weights[3] < 1.0 {
+            weights[4] = -9999999.0; // no loitering on empty cells
+            let [c0, cn, cs, ce, cw] = state.get_return_dir_costs(pos);
+            weights[0] += 0.1 * (cw - c0) as f64;
+            weights[1] += 0.1 * (ce - c0) as f64;
+            weights[2] += 0.1 * (cn - c0) as f64;
+            weights[3] += 0.1 * (cs - c0) as f64;
+        } else if state.game.map.at_position(&pos).structure != Structure::None {
             weights[4] = -9999999.0; // no loitering at the shipyard
         } else if current_halite > state.config.ships.greedy_harvest_limit && phi0 < 1000.0 {
             weights[4] = 1000.0 + current_halite as f64;
