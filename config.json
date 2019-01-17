@@ -7,7 +7,7 @@
   },
 
   "navigation": {
-    "return_step_cost": 1,
+    "return_step_cost": 100,
     "go_home_safety_factor": 1
   },
 
