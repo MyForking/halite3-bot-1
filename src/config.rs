@@ -31,6 +31,7 @@ pub struct Pheromones {
     pub diffusion_coefficient: f64,
     pub decay_rate: f64,
     pub ship_absorbtion: f64,
+    pub ship_evaporation: f64,
     pub time_step: f64,
     pub n_steps: usize,
 }

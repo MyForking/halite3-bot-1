@@ -78,6 +78,7 @@ pub struct GameState {
 
     pheromones: Vec<Vec<f64>>,
     pheromones_backbuffer: Vec<Vec<f64>>,
+    pheromones_temporary_sources: Vec<(Position, f64)>,
 
     halite_density: Vec<Vec<i32>>,
     return_map_directions: Vec<Vec<Direction>>,
@@ -101,6 +102,7 @@ impl GameState {
 
             pheromones: vec![vec![0.0; game.map.width]; game.map.height],
             pheromones_backbuffer: vec![vec![0.0; game.map.width]; game.map.height],
+            pheromones_temporary_sources: vec![],
 
             halite_density: vec![vec![0; game.map.width]; game.map.height],
             return_map_directions: vec![vec![Direction::Still; game.map.width]; game.map.height],
@@ -472,15 +474,21 @@ impl GameState {
                     dphi * self.config.pheromones.time_step;
             }
 
+            for (p, dphi) in &self.pheromones_temporary_sources {
+                self.pheromones_backbuffer[p.y as usize][p.x as usize] +=
+                    dphi * self.config.pheromones.time_step;
+            }
+
+            self.pheromones_temporary_sources.clear();
+
             std::mem::swap(&mut self.pheromones, &mut self.pheromones_backbuffer);
         }
     }
 
-    /*fn add_pheromone(&mut self, pos: Position, amount: f64) {
+    fn add_pheromone(&mut self, pos: Position, rate: f64) {
         let pos = self.game.map.normalize(&pos);
-        let (i, j) = (pos.y as usize, pos.x as usize);
-        self.pheromones[i][j] += amount;
-    }*/
+        self.pheromones_temporary_sources.push((pos, rate));
+    }
 
     fn get_pheromone(&self, pos: Position) -> f64 {
         let pos = self.game.map.normalize(&pos);
@@ -546,8 +554,19 @@ impl Commander {
             }
         }
 
+        let (max_pos, max_density) = state.halite_density.iter().enumerate()
+            .flat_map(|(i, row)| row.iter().enumerate().map(move|(j, &x)| (i, j, x)))
+            .max_by_key(|(_, _, x)| *x)
+            .map(|(i, j, x)| (Position{x:j as i32, y: i as i32}, x)).unwrap();
+
         let want_dropoff =
-            state.avg_return_length >= state.config.expansion.expansion_distance as f64;
+            state.avg_return_length >= state.config.expansion.expansion_distance as f64 && max_density >= state.config.expansion.min_halite_density;
+
+        if want_dropoff {
+            // create a massive pheromone spike at a good dropoff location
+            //state.add_pheromone(max_pos, 100000.0);
+            state.add_pheromone(max_pos, 100000.0);
+        }
 
         if want_dropoff && state.me().halite >= state.game.constants.dropoff_cost {
             let id = self
@@ -568,11 +587,11 @@ impl Commander {
                 })
                 .map(|&id| {
                     let p = state.get_ship(id).position;
-                    (id, state.halite_density[p.y as usize][p.x as usize])
+                    (id, state.halite_density[p.y as usize][p.x as usize], state.pheromones[p.y as usize][p.x as usize])
                 })
-                .filter(|&(_, density)| density >= state.config.expansion.min_halite_density)
-                .max_by_key(|&(_, density)| density)
-                .map(|(id, _)| id);
+                .filter(|&(_, density, _)| density >= state.config.expansion.min_halite_density)
+                .max_by_key(|&(_, _, phi)| phi as i64)
+                .map(|(id, _, _)| id);
 
             self.builder = id;
 

@@ -1,7 +1,7 @@
 {
   "expansion": {
-    "expansion_distance": 20,
-    "min_halite_density": 150,
+    "expansion_distance": 15,
+    "min_halite_density": 125,
     "ship_radius": 12,
     "n_ships": 10
   },
@@ -16,6 +16,7 @@
     "diffusion_coefficient": 10,
     "decay_rate": 0.25,
     "ship_absorbtion": 0.15,
+    "ship_evaporation": 0.0,
     "time_step": 0.02,
     "n_steps": 50
   },

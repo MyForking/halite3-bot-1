@@ -57,7 +57,8 @@ fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
             state.gns.plan_move(id, pos, harvest, cn, cs, ce, cw);
         }
 
-        //state.add_pheromone(pos, cargo as f64);
+        let ev = state.config.pheromones.ship_evaporation;
+        state.add_pheromone(pos, cargo as f64 * ev);
 
         turns_taken += 1;
 
@@ -249,7 +250,7 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         if state.game.map.at_position(&pos).structure != Structure::None {
             weights[4] = -9999999.0; // no loitering at the shipyard
-        } else if current_halite > state.config.ships.greedy_harvest_limit {
+        } else if current_halite > state.config.ships.greedy_harvest_limit && phi0 < 1000.0 {
             weights[4] = 1000.0 + current_halite as f64;
         } else if current_halite as f64 > phi0 {
             weights[4] = current_halite as f64;
