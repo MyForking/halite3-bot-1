@@ -26,10 +26,12 @@ if __name__ == '__main__':
     n = 100
 
     scores_list = []
+    n_wins = 0
     for k in ProgressBar()(range(n)):
         order = list(range(len(bots)))
         random.shuffle(order)
         s = run_game([bots[i] for i in order], size)
+        n_wins += np.argmax(s) == order.index(0)
         scores_list.append((s[order.index(0)], np.mean([s[order.index(i)] for i in order[1:]])))
 
         if (k + 1) % 10 == 0:
@@ -41,6 +43,7 @@ if __name__ == '__main__':
             print(np.median(scores[:, 0] - scores[:, 1]))
             print(np.mean(scores[:, 0] - scores[:, 1]))
             print(np.std(scores[:, 0] - scores[:, 1]))
+            print(n_wins, 'wins')
 
     plt.hist(scores[:, 0] - scores[:, 1], int(np.sqrt(n)))
     plt.show()
