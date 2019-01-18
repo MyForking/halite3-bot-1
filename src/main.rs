@@ -8,7 +8,7 @@ extern crate serde_json;
 extern crate serde_derive;
 
 use behavior_tree::BtNode;
-use bt_tasks::{build_dropoff, collector, kamikaze};
+use bt_tasks::{build_dropoff, collector};
 use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
@@ -502,9 +502,6 @@ struct Commander {
     lost_ships: HashSet<ShipId>,
     ships: HashSet<ShipId>,
     ship_ais: HashMap<ShipId, Box<dyn BtNode<GameState>>>,
-
-    builder: Option<ShipId>,
-    kamikaze: Option<ShipId>,
 }
 
 impl Commander {
@@ -514,8 +511,6 @@ impl Commander {
             lost_ships: HashSet::new(),
             ships: HashSet::new(),
             ship_ais: HashMap::new(),
-            builder: None,
-            kamikaze: None,
         }
     }
 
@@ -530,12 +525,6 @@ impl Commander {
     fn process_frame(&mut self, state: &mut GameState) {
         for id in self.lost_ships.drain() {
             self.ship_ais.remove(&id);
-            if self.kamikaze == Some(id) {
-                self.kamikaze = None
-            }
-            if self.builder == Some(id) {
-                self.builder = None
-            }
         }
 
         for id in self.new_ships.drain() {
@@ -546,13 +535,6 @@ impl Commander {
         Log::log(&format!("commanding {} ships", self.ships.len()));
 
         let syp = state.me().shipyard.position;
-
-        if let Some(id) = self.kamikaze {
-            if state.get_ship(id).position == syp {
-                *self.ship_ais.get_mut(&id).unwrap() = collector(id);
-                self.kamikaze = None;
-            }
-        }
 
         let (max_pos, max_density) = state.halite_density.iter().enumerate()
             .flat_map(|(i, row)| row.iter().enumerate().map(move|(j, &x)| (i, j, x)))
@@ -593,8 +575,6 @@ impl Commander {
                 .max_by_key(|&(_, _, phi)| phi as i64)
                 .map(|(id, _, _)| id);
 
-            self.builder = id;
-
             if let Some(id) = id {
                 *self.ship_ais.get_mut(&id).unwrap() = build_dropoff(id);
             }
@@ -617,21 +597,6 @@ impl Commander {
             .values()
             .filter(|ship| ship.owner != state.me().id)
             .any(|ship| ship.position == state.me().shipyard.position);
-
-        if enemy_blocks && self.kamikaze.is_none() {
-            let t = state.me().shipyard.position;
-            if let Some((id, _)) = self
-                .ship_ais
-                .iter()
-                //.filter(|(_, ai)| ai.is_returning_collector())
-                .map(|(&id, _)| (id, state.get_ship(id).position))
-                .map(|(id, pos)| (id, (pos.x - t.x).abs() + (pos.y - t.y).abs()))
-                .min_by_key(|&(_, dist)| dist)
-            {
-                self.kamikaze = Some(id);
-                *self.ship_ais.get_mut(&id).unwrap() = kamikaze(id);
-            }
-        }
 
         let mut want_ship = if state.game.turn_number > 100 {
             // average halite collected per ship in the last n turns

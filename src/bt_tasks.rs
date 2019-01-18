@@ -348,7 +348,3 @@ pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
         go_home(id),
     ]))
 }
-
-pub fn kamikaze(id: ShipId) -> Box<impl BtNode<GameState>> {
-    go_home(id)
-}
