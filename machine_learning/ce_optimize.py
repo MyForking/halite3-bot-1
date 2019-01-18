@@ -8,8 +8,12 @@ import datetime
 import os
 import scipy.stats as sps
 
+from progressbar import ProgressBar
+
 def start_game(cfgfile):        
-    proc = subprocess.Popen(['../halite', '--no-timeout', '--no-replay', '--no-logs', '--width 32', '--height 32', '--results-as-json', '../target/release/my_bot -c ' + cfgfile, '../old_bots/v13'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.Popen(['../halite', '--no-timeout', '--no-replay', '--no-logs', '--width 32', '--height 32', 
+                             '--results-as-json', 
+                             '../target/release/my_bot -c ' + cfgfile, '../old_bots/v15 -c ../old_bots/v15.cfg.json'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return proc
 
 def get_game(proc):    
@@ -26,21 +30,15 @@ def get_game(proc):
 
 config = json.load(open('../config.json'))
 
-LEARNING_RATE = 3e-1
+LEARNING_RATE = 1e-1
 
 parsize = 5
-n_repeats = 4
+n_repeats = 10
 batchsize = 100
 n_best = 10
 
-mu = {'ships': {'greedy_move_cost_factor': 0.0,
-                'seek_greed_factor': 0.0,
-                'seek_return_cost_factor': 0.0,
-                'seek_pheromone_factor': 0.0}}
-var = {'ships': {'greedy_move_cost_factor': 1.0,
-                 'seek_greed_factor': 1.0,
-                 'seek_return_cost_factor': 1.0,
-                 'seek_pheromone_factor': 1.0}}
+mu = {'ships': {'ship_absorbtion': 0.5}}
+var = {'ships': {'ship_absorbtion': 1.0,}}
 
 #lim = {'ships': {'seek_pheromone_cost': (-np.inf, np.inf)}}
 #trans = {'ships': {'seek_pheromone_cost': lambda x: x}}
@@ -51,18 +49,18 @@ maxvar = np.inf
 score_hist = []
  
 n_iter = 0
-while n_iter < 100 and maxvar > 1e-2:
+while n_iter < 100 and maxvar > 1e-6:
     n_iter += 1
     instances = []
     delta_score = []
-    for _ in range(batchsize):
+    for _ in ProgressBar()(range(batchsize)):
         instance = deepcopy(config)
         for cat in mu.keys():
             for val in mu[cat].keys():
                 x = np.random.randn() * np.sqrt(var[cat][val]) + mu[cat][val]
                 #l = lim[cat][val]
                 #x = np.clip(x, *l)
-                instance[cat][val] = x #trans[cat][val](x)
+                instance[cat][val] = int(x) #trans[cat][val](x)
                 
         cfgfile = "tmpcfg.json"
         with open(cfgfile, 'w') as f:
@@ -94,5 +92,6 @@ while n_iter < 100 and maxvar > 1e-2:
             
     maxvar = min(maxvar, mv)
     
+    print()
     print(mu)    
     print('{}: max_var={}, scores={}'.format(n_iter, maxvar, score_hist[-1]))
