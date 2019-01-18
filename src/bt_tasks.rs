@@ -50,10 +50,15 @@ fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
         if !stuck_move(id, state) {
             let [c0, cn, cs, ce, cw] = state.get_return_dir_costs(pos);
 
-            let cn = cn - c0;
-            let cs = cs - c0;
-            let ce = ce - c0;
-            let cw = cw - c0;
+            let ok_n = !state.mp.is_occupied(pos.directional_offset(Direction::North));
+            let ok_s = !state.mp.is_occupied(pos.directional_offset(Direction::South));
+            let ok_e = !state.mp.is_occupied(pos.directional_offset(Direction::East));
+            let ok_w = !state.mp.is_occupied(pos.directional_offset(Direction::West));
+
+            let cn = if ok_n {cn - c0} else {i32::max_value()};
+            let cs = if ok_s {cs - c0} else {i32::max_value()};
+            let ce = if ok_e {ce - c0} else {i32::max_value()};
+            let cw = if ok_w {cw - c0} else {i32::max_value()};
             state.gns.plan_move(id, pos, harvest, cn, cs, ce, cw);
         }
 
@@ -91,10 +96,15 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         let [c0, cn, cs, ce, cw] = state.get_return_dir_costs(pos);
 
-        let cn = cn - c0;
-        let cs = cs - c0;
-        let ce = ce - c0;
-        let cw = cw - c0;
+        let ok_n = !state.mp.is_occupied(pos.directional_offset(Direction::North));
+        let ok_s = !state.mp.is_occupied(pos.directional_offset(Direction::South));
+        let ok_e = !state.mp.is_occupied(pos.directional_offset(Direction::East));
+        let ok_w = !state.mp.is_occupied(pos.directional_offset(Direction::West));
+
+        let cn = if ok_n {cn - c0} else {i32::max_value()};
+        let cs = if ok_s {cs - c0} else {i32::max_value()};
+        let ce = if ok_e {ce - c0} else {i32::max_value()};
+        let cw = if ok_w {cw - c0} else {i32::max_value()};
         let c0 = state.config.navigation.return_step_cost as i32;
         state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 
@@ -263,16 +273,23 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
             weights[4] = current_halite as f64;
         }
 
-        Log::log(&format!("    {:?}", weights));
+        //Log::log(&format!("    {:?}", weights));
+
+        let ok_n = !state.mp.is_occupied(pos.directional_offset(Direction::North));
+        let ok_s = !state.mp.is_occupied(pos.directional_offset(Direction::South));
+        let ok_e = !state.mp.is_occupied(pos.directional_offset(Direction::East));
+        let ok_w = !state.mp.is_occupied(pos.directional_offset(Direction::West));
+
+        let cn = if ok_n {-(weights[2] * 100.0) as i32} else {i32::max_value()};
+        let cs = if ok_s {-(weights[3] * 100.0) as i32} else {i32::max_value()};
+        let ce = if ok_e {-(weights[1] * 100.0) as i32} else {i32::max_value()};
+        let cw = if ok_w {-(weights[0] * 100.0) as i32} else {i32::max_value()};
+        let c0 = -(weights[4] * 100.0) as i32;
 
         state.gns.plan_move(
             id,
             pos,
-            -(weights[4] * 100.0) as i32,
-            -(weights[2] * 100.0) as i32,
-            -(weights[3] * 100.0) as i32,
-            -(weights[1] * 100.0) as i32,
-            -(weights[0] * 100.0) as i32,
+            c0, cn, cs, ce, cw
         );
 
         BtState::Running

@@ -30,6 +30,7 @@ mod behavior_tree;
 mod bt_tasks;
 mod config;
 mod hlt;
+mod movement_predictor;
 mod navigation_system;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -67,6 +68,9 @@ pub struct GameState {
     navi: Navi,
 
     #[serde(skip)]
+    mp: movement_predictor::MovementPredictor,
+
+    #[serde(skip)]
     gns: navigation_system::NavigationSystem,
 
     #[serde(skip)]
@@ -94,6 +98,7 @@ impl GameState {
         let state = GameState {
             config: config::Config::from_file(cfg_file),
             navi: Navi::new(game.map.width, game.map.height),
+            mp: movement_predictor::MovementPredictor::new(game.map.width, game.map.height),
             gns: navigation_system::NavigationSystem::new(game.map.width, game.map.height),
             command_queue: vec![],
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
@@ -122,6 +127,7 @@ impl GameState {
     fn update_frame(&mut self) {
         self.game.update_frame();
         self.navi.update_frame(&self.game);
+        self.mp.update_frame(&self.game);
         self.gns.clear();
 
         self.compute_halite_density();
