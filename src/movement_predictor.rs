@@ -41,14 +41,12 @@ impl MovementPredictor {
             let last_pos = prev_ships.get(&id).map(|si| si.pos).unwrap_or(pos);
             self.ships.insert(id, ShipInfo {pos, last_pos, cargo});
 
-            for p in Direction::get_all_options().into_iter().map(|d|pos.directional_offset(d)).map(|p| game.map.normalize(&p)) {
-                self.probs[p.y as usize][p.x as usize] = match game.map.at_position(&p).structure {
-                    // simply ignore enemy ships at my own structures
-                    Structure::Dropoff(did) if game.dropoffs[&did].owner == game.my_id => 0.0,
-                    Structure::Shipyard(pid) if pid == game.my_id => 0.0,
-                    _ => 1.0,
-                };
-            }
+            self.probs[pos.y as usize][pos.x as usize] = match game.map.at_position(&pos).structure {
+                // simply ignore enemy ships at my own structures
+                Structure::Dropoff(did) if game.dropoffs[&did].owner == game.my_id => 0.0,
+                Structure::Shipyard(pid) if pid == game.my_id => 0.0,
+                _ => 1.0,
+            };
         }
     }
 
