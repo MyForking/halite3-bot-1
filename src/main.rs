@@ -18,6 +18,7 @@ use hlt::player::Player;
 use hlt::position::Position;
 use hlt::ship::Ship;
 use hlt::ShipId;
+use hlt::map_cell::Structure;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
@@ -57,6 +58,72 @@ impl<C: Ord, T: Eq> DijkstraMinNode<C, T> {
     }
 }
 
+struct Camp {
+    pos: [Position; 2],
+    guards: [Option<ShipId>; 2],
+}
+
+impl Camp {
+    fn new(p: Position) -> Self {
+        Camp {
+            pos: [Position{x: p.x-1, y: p.y-1}, Position{x: p.x+1, y: p.y+1}],
+            guards: [None; 2],
+        }
+    }
+}
+
+struct Camps {
+    camps: HashMap<Position, Camp>,
+}
+
+impl Camps {
+    fn new() -> Self {
+        Camps {
+            camps: HashMap::new()
+        }
+    }
+
+    fn update_frame(&mut self, game: &Game) {
+        let shipyards = game.players.iter()
+            .filter(|player| player.id != game.my_id)
+            .map(|player| player.shipyard.position);
+
+        let dropoffs = game.dropoffs.values()
+            .filter(|dropoff| dropoff.owner != game.my_id)
+            .map(|dropoff| dropoff.position);
+
+        for pos in shipyards.chain(dropoffs) {
+            self.camps.entry(pos).or_insert_with(|| Camp::new(pos));
+        }
+    }
+
+    fn assign_ship(&mut self, id: ShipId) -> Option<(Position, Position)> {
+        for (&pos, camp) in self.camps.iter_mut() {
+            for (&p, g) in camp.pos.iter().zip(&mut camp.guards) {
+                if g.is_none() {
+                    *g = Some(id);
+                    return Some((pos, p))
+                }
+            }
+        }
+        None
+    }
+
+    fn remove_ship(&mut self, id: ShipId) {
+        for camp in self.camps.values_mut() {
+            for g in &mut camp.guards {
+                let clear = if let Some(i) = g {
+                    *i == id
+                } else { false };
+
+                if clear {
+                    *g = None;
+                }
+            }
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct GameState {
     #[serde(skip)]
@@ -76,6 +143,8 @@ pub struct GameState {
     #[serde(skip)]
     command_queue: Vec<Command>,
 
+    ship_map: Vec<Vec<Option<ShipId>>>,
+
     collect_statistic: Vec<f64>,
     last_halite: usize,
     total_spent: usize,
@@ -90,6 +159,9 @@ pub struct GameState {
 
     halite_percentiles: Vec<usize>,
     avg_return_length: f64,
+
+    #[serde(skip)]
+    camps: Camps,
 }
 
 impl GameState {
@@ -101,6 +173,7 @@ impl GameState {
             mp: movement_predictor::MovementPredictor::new(game.map.width, game.map.height),
             gns: navigation_system::NavigationSystem::new(game.map.width, game.map.height),
             command_queue: vec![],
+            ship_map: vec![vec![None; game.map.width]; game.map.height],
             collect_statistic: Vec::with_capacity(game.constants.max_turns),
             last_halite: 5000,
             total_spent: 0,
@@ -116,6 +189,8 @@ impl GameState {
             halite_percentiles: vec![0; 101],
             avg_return_length: 0.0,
 
+            camps: Camps::new(),
+
             game,
         };
 
@@ -126,6 +201,13 @@ impl GameState {
 
     fn update_frame(&mut self) {
         self.game.update_frame();
+
+        self.ship_map = vec![vec![None; self.game.map.width]; self.game.map.height];
+        for (&id, pos) in self.game.ships.iter().map(|(id, s)| (id, s.position)) {
+            self.ship_map[pos.y as usize][pos.x as usize] = Some(id);
+        }
+
+        self.camps.update_frame(&self.game);
         self.navi.update_frame(&self.game);
         self.mp.update_frame(&self.game);
         self.gns.clear();
@@ -368,6 +450,57 @@ impl GameState {
         }
     }
 
+    fn get_dijkstra_move(&mut self, pos: Position, dest: Position) -> [i32; 5] {
+        let mut costs = [i32::max_value(); 5];
+
+        let moves: Vec<_> = Direction::get_all_options().into_iter().map(|d| self.game.map.normalize(&pos.directional_offset(d))).collect();
+        let mut visited = [false; 5];
+
+        let mut queue = BinaryHeap::new();
+        queue.push(DijkstraMinNode::new(
+            0,
+            self.game.map.normalize(&dest),
+        ));
+
+        let mut cumulative_costs = HashMap::new();
+
+        while let Some(node) = queue.pop() {
+            let p = self.game.map.normalize(&node.data);
+
+            match cumulative_costs.get(&p) {
+                Some(&c) if node.cost >= c => continue,
+                _ => {}
+            }
+
+            for ((q, v), c) in moves.iter().zip(&mut visited).zip(&mut costs) {
+                if p == *q {
+                    *c = node.cost;
+                    *v = true;
+                }
+            }
+
+            if visited.iter().all(|&v| v) {
+                break
+            }
+
+            cumulative_costs.insert(p, node.cost);
+
+            for d in Direction::get_all_cardinals() {
+                let q = p.directional_offset(d);
+                if let Structure::Shipyard(pid) = self.game.map.at_position(&q).structure {
+                    // don't trigger opponent's anti griefing mechanic
+                    if pid != self.game.my_id {
+                        continue
+                    }
+                }
+                let c = node.cost + self.movement_cost(&q) as i32 + 1;
+                queue.push(DijkstraMinNode::new(c, q));
+            }
+        }
+
+        return costs;
+    }
+
     fn compute_return_map(&mut self) {
         for cc in self
             .return_cumultive_costs
@@ -407,6 +540,12 @@ impl GameState {
                     continue;
                 }
                 let p = pos.directional_offset(d.invert_direction());
+                if let Structure::Shipyard(pid) = self.game.map.at_position(&p).structure {
+                    // don't trigger opponent's anti griefing mechanic
+                    if pid != self.game.my_id {
+                        continue
+                    }
+                }
                 let c =
                     node.cost + self.movement_cost(&p) + self.config.navigation.return_step_cost;
                 queue.push(DijkstraMinNode::new(c, (p, d)));
@@ -531,6 +670,7 @@ impl Commander {
     fn process_frame(&mut self, state: &mut GameState) {
         for id in self.lost_ships.drain() {
             self.ship_ais.remove(&id);
+            state.camps.remove_ship(id);
         }
 
         for id in self.new_ships.drain() {

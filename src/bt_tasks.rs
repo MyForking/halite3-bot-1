@@ -4,8 +4,11 @@ use behavior_tree::{
 use hlt::direction::Direction;
 use hlt::log::Log;
 use hlt::map_cell::Structure;
+use hlt::position::Position;
 use hlt::ShipId;
+use std::cell::{Cell, RefCell};
 use std::f64;
+use std::rc::Rc;
 use GameState;
 
 fn stuck_move(id: ShipId, state: &mut GameState) -> bool {
@@ -81,17 +84,24 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
         }
 
         for d in Direction::get_all_cardinals() {
-            if state
+            match state
                 .game
                 .map
                 .at_position(&pos.directional_offset(d))
                 .structure
-                .is_some()
             {
-                // todo: only my own structures?
-                state.gns.force_move(id, d);
-                return BtState::Running;
+                Structure::Dropoff(did) if state.game.dropoffs[&did].owner == state.game.my_id => {
+                    state.gns.force_move(id, d);
+                    return BtState::Running;
+                }
+                Structure::Shipyard(pid) if pid == state.game.my_id => {
+                    state.gns.force_move(id, d);
+                    return BtState::Running;
+                }
+                _ => {}
             }
+
+
         }
 
         let [c0, cn, cs, ce, cw] = state.get_return_dir_costs(pos);
@@ -112,20 +122,24 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
     })
 }
 
-/*fn go_to(id: ShipId, dest: Position) -> Box<impl BtNode<GameState>> {
+fn go_to(id: ShipId, dest: Position) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
-        if state.get_ship(id).position == dest {
+        let pos = state.get_ship(id).position;
+
+        if pos == dest {
             return BtState::Success;
         }
 
-        let pos = state.get_ship(id).position;
-        let path = state.get_dijkstra_path(pos, dest);
-        let d = path.first().cloned().unwrap_or(Direction::Still);
-        state.move_ship_or_wait(id, d);
+        if stuck_move(id, state) {
+            return BtState::Running;
+        }
+
+        let costs = state.get_dijkstra_move(pos, dest);
+        state.gns.plan_move(id, pos, costs[4], costs[2], costs[3], costs[1], costs[0]);
 
         BtState::Running
     })
-}*/
+}
 
 /*fn find_res(id: ShipId) -> Box<impl BtNode<GameState>> {
     lambda(move |state: &mut GameState| {
@@ -348,12 +362,7 @@ pub fn build_dropoff(id: ShipId) -> Box<impl BtNode<GameState>> {
 pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
     continuous(select(vec![
         interrupt(
-            select(vec![
-                sequence(vec![greedy(id), deliver(id)]),
-                /*find_res(id),
-                sequence(vec![desperate(id), deliver(id)]),
-                find_desperate(id),*/
-            ]),
+            sequence(vec![select(vec![/*battle_camper(id), */greedy(id)]), deliver(id)]),
             move |env| {
                 let dist = env.get_return_distance(env.get_ship(id).position);
                 env.rounds_left()
@@ -364,4 +373,118 @@ pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
         ),
         go_home(id),
     ]))
+}
+
+pub fn battle_camper(id: ShipId) -> Box<impl BtNode<GameState>> {
+    let mut target = Rc::new(Cell::new((Position{x:4, y:4}, Position{x:5, y:5})));
+
+    sequence(vec![
+        // 1. find target
+        {
+            let target = target.clone();
+            lambda(move |state: &mut GameState| {
+
+                if state.rounds_left() > 200 {
+                    return BtState::Failure
+                }
+
+                match state.camps.assign_ship(id) {
+                    Some(p) => {
+                        target.replace(p);
+                        BtState::Success
+                    }
+                    None => BtState::Failure
+                }
+            })
+        },
+
+        // 2. go to target
+        {
+            let target = target.clone();
+            lambda(move |state: &mut GameState| {
+                let dest = target.get().1;
+                let pos = state.get_ship(id).position;
+
+                if pos == dest {
+                    return BtState::Success;
+                }
+
+                if stuck_move(id, state) {
+                    return BtState::Running;
+                }
+
+                let costs = state.get_dijkstra_move(pos, dest);
+                state.gns.plan_move(id, pos, costs[4], costs[2], costs[3], costs[1], costs[0]);
+
+                BtState::Running
+            })
+        },
+
+        // 3. wait...
+        {
+            let target = target.clone();
+            lambda(move |state: &mut GameState| {
+                const MIN_CARGO: usize = 600;
+
+                let pos = state.get_ship(id).position;
+
+                let center = target.get().0;
+
+                let p1 = state.game.map.normalize(&Position{x: center.x - 1, y: center.y - 1});
+                let p2 = state.game.map.normalize(&Position{x: center.x + 1, y: center.y + 1});
+
+                if state.ship_map[p1.y as usize][p1.x as usize].is_none() || state.ship_map[p2.y as usize][p2.x as usize].is_none() {
+                    return BtState::Running
+                }
+
+                let p_n = state.game.map.normalize(&Position{x: center.x, y: center.y - 2});
+                let p_s = state.game.map.normalize(&Position{x: center.x, y: center.y + 2});
+                let p_e = state.game.map.normalize(&Position{x: center.x + 2, y: center.y});
+                let p_w = state.game.map.normalize(&Position{x: center.x - 2, y: center.y});
+
+                let cargo_n = state.ship_map[p_n.y as usize][p_n.x as usize].map(|id| state.game.ships[&id].halite).unwrap_or(0);
+                let cargo_s = state.ship_map[p_s.y as usize][p_s.x as usize].map(|id| state.game.ships[&id].halite).unwrap_or(0);
+                let cargo_e = state.ship_map[p_e.y as usize][p_e.x as usize].map(|id| state.game.ships[&id].halite).unwrap_or(0);
+                let cargo_w = state.ship_map[p_w.y as usize][p_w.x as usize].map(|id| state.game.ships[&id].halite).unwrap_or(0);
+
+                match (pos.x - center.x, pos.y - center.y) {
+                    (-1, -1) if cargo_n >= MIN_CARGO => state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), i32::max_value(), 0, i32::max_value()),
+                    (1, 1) if cargo_n >= MIN_CARGO => {
+                        state.gns.plan_move(id, pos, i32::max_value(), 0, i32::max_value(), i32::max_value(), i32::max_value());
+                        return BtState::Success
+                    }
+
+                    (-1, -1) if cargo_w >= MIN_CARGO => state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), 0, i32::max_value(), i32::max_value()),
+                    (1, 1) if cargo_w >= MIN_CARGO => {
+                        state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value(), 0);
+                        return BtState::Success
+                    }
+
+                    (1, 1) if cargo_s >= MIN_CARGO => state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value(), 0),
+                    (-1, -1) if cargo_s >= MIN_CARGO => {
+                        state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), 0, i32::max_value(), i32::max_value());
+                        return BtState::Success
+                    }
+
+                    (1, 1) if cargo_e >= MIN_CARGO => state.gns.plan_move(id, pos, i32::max_value(), 0, i32::max_value(), i32::max_value(), i32::max_value()),
+                    (-1, -1) if cargo_e >= MIN_CARGO => {
+                        state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), i32::max_value(), 0, i32::max_value());
+                        return BtState::Success
+                    }
+
+                    _ => state.gns.plan_move(id, pos, 0, i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value()),
+                }
+
+                BtState::Running
+            })
+        },
+
+        // 4. collect...
+        {
+            let target = target.clone();
+            lambda(move |state: &mut GameState| {
+                BtState::Failure
+            })
+        },
+    ])
 }
