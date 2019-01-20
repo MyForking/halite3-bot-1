@@ -13,12 +13,12 @@ use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
 use hlt::log::Log;
+use hlt::map_cell::Structure;
 use hlt::navi::Navi;
 use hlt::player::Player;
 use hlt::position::Position;
 use hlt::ship::Ship;
 use hlt::ShipId;
-use hlt::map_cell::Structure;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
@@ -66,7 +66,16 @@ struct Camp {
 impl Camp {
     fn new(p: Position) -> Self {
         Camp {
-            pos: [Position{x: p.x-1, y: p.y-1}, Position{x: p.x+1, y: p.y+1}],
+            pos: [
+                Position {
+                    x: p.x - 1,
+                    y: p.y - 1,
+                },
+                Position {
+                    x: p.x + 1,
+                    y: p.y + 1,
+                },
+            ],
             guards: [None; 2],
         }
     }
@@ -79,16 +88,20 @@ struct Camps {
 impl Camps {
     fn new() -> Self {
         Camps {
-            camps: HashMap::new()
+            camps: HashMap::new(),
         }
     }
 
     fn update_frame(&mut self, game: &Game) {
-        let shipyards = game.players.iter()
+        let shipyards = game
+            .players
+            .iter()
             .filter(|player| player.id != game.my_id)
             .map(|player| player.shipyard.position);
 
-        let dropoffs = game.dropoffs.values()
+        let dropoffs = game
+            .dropoffs
+            .values()
             .filter(|dropoff| dropoff.owner != game.my_id)
             .map(|dropoff| dropoff.position);
 
@@ -102,7 +115,7 @@ impl Camps {
             for (&p, g) in camp.pos.iter().zip(&mut camp.guards) {
                 if g.is_none() {
                     *g = Some(id);
-                    return Some((pos, p))
+                    return Some((pos, p));
                 }
             }
         }
@@ -112,9 +125,7 @@ impl Camps {
     fn remove_ship(&mut self, id: ShipId) {
         for camp in self.camps.values_mut() {
             for g in &mut camp.guards {
-                let clear = if let Some(i) = g {
-                    *i == id
-                } else { false };
+                let clear = if let Some(i) = g { *i == id } else { false };
 
                 if clear {
                     *g = None;
@@ -453,14 +464,14 @@ impl GameState {
     fn get_dijkstra_move(&mut self, pos: Position, dest: Position) -> [i32; 5] {
         let mut costs = [i32::max_value(); 5];
 
-        let moves: Vec<_> = Direction::get_all_options().into_iter().map(|d| self.game.map.normalize(&pos.directional_offset(d))).collect();
+        let moves: Vec<_> = Direction::get_all_options()
+            .into_iter()
+            .map(|d| self.game.map.normalize(&pos.directional_offset(d)))
+            .collect();
         let mut visited = [false; 5];
 
         let mut queue = BinaryHeap::new();
-        queue.push(DijkstraMinNode::new(
-            0,
-            self.game.map.normalize(&dest),
-        ));
+        queue.push(DijkstraMinNode::new(0, self.game.map.normalize(&dest)));
 
         let mut cumulative_costs = HashMap::new();
 
@@ -480,7 +491,7 @@ impl GameState {
             }
 
             if visited.iter().all(|&v| v) {
-                break
+                break;
             }
 
             cumulative_costs.insert(p, node.cost);
@@ -490,7 +501,7 @@ impl GameState {
                 if let Structure::Shipyard(pid) = self.game.map.at_position(&q).structure {
                     // don't trigger opponent's anti griefing mechanic
                     if pid != self.game.my_id {
-                        continue
+                        continue;
                     }
                 }
                 let c = node.cost + self.movement_cost(&q) as i32 + 1;
@@ -543,7 +554,7 @@ impl GameState {
                 if let Structure::Shipyard(pid) = self.game.map.at_position(&p).structure {
                     // don't trigger opponent's anti griefing mechanic
                     if pid != self.game.my_id {
-                        continue
+                        continue;
                     }
                 }
                 let c =
@@ -682,13 +693,26 @@ impl Commander {
 
         let syp = state.me().shipyard.position;
 
-        let (max_pos, max_density) = state.halite_density.iter().enumerate()
-            .flat_map(|(i, row)| row.iter().enumerate().map(move|(j, &x)| (i, j, x)))
+        let (max_pos, max_density) = state
+            .halite_density
+            .iter()
+            .enumerate()
+            .flat_map(|(i, row)| row.iter().enumerate().map(move |(j, &x)| (i, j, x)))
             .max_by_key(|(_, _, x)| *x)
-            .map(|(i, j, x)| (Position{x:j as i32, y: i as i32}, x)).unwrap();
+            .map(|(i, j, x)| {
+                (
+                    Position {
+                        x: j as i32,
+                        y: i as i32,
+                    },
+                    x,
+                )
+            })
+            .unwrap();
 
-        let want_dropoff =
-            state.avg_return_length >= state.config.expansion.expansion_distance as f64 && max_density >= state.config.expansion.min_halite_density;
+        let want_dropoff = state.avg_return_length
+            >= state.config.expansion.expansion_distance as f64
+            && max_density >= state.config.expansion.min_halite_density;
 
         if want_dropoff {
             // create a massive pheromone spike at a good dropoff location
@@ -701,7 +725,12 @@ impl Commander {
                 .ships
                 .iter()
                 .filter(|&&id| {
-                    state.game.map.at_entity(state.get_ship(id)).structure.is_none()
+                    state
+                        .game
+                        .map
+                        .at_entity(state.get_ship(id))
+                        .structure
+                        .is_none()
                 })
                 .filter(|&&id| {
                     state.distance_to_nearest_dropoff(id)
@@ -718,7 +747,11 @@ impl Commander {
                 })
                 .map(|&id| {
                     let p = state.get_ship(id).position;
-                    (id, state.halite_density[p.y as usize][p.x as usize], state.pheromones[p.y as usize][p.x as usize])
+                    (
+                        id,
+                        state.halite_density[p.y as usize][p.x as usize],
+                        state.pheromones[p.y as usize][p.x as usize],
+                    )
                 })
                 .filter(|&(_, density, _)| density >= state.config.expansion.min_halite_density)
                 .max_by_key(|&(_, _, phi)| phi as i64)
@@ -742,18 +775,24 @@ impl Commander {
 
         let mut want_ship = {
             let bias = state.config.strategy.spawn_halite_floor;
-            let halite_left: usize = state.game.map.iter().map(|cell| cell.halite.max(bias) - bias).sum();
+            let halite_left: usize = state
+                .game
+                .map
+                .iter()
+                .map(|cell| cell.halite.max(bias) - bias)
+                .sum();
             let n_ships = state.game.ships.len() + 1;
 
-            (halite_left / n_ships > state.game.constants.ship_cost) && state.rounds_left() > state.game.map.width * state.config.strategy.spawn_min_rounds_left_factor
+            (halite_left / n_ships > state.game.constants.ship_cost)
+                && state.rounds_left()
+                    > state.game.map.width * state.config.strategy.spawn_min_rounds_left_factor
         };
 
         want_ship &= !want_dropoff
             || state.me().halite
                 >= state.game.constants.dropoff_cost + state.game.constants.ship_cost;
 
-        if want_ship && state.me().halite >= state.game.constants.ship_cost
-        {
+        if want_ship && state.me().halite >= state.game.constants.ship_cost {
             let pos = state.me().shipyard.position;
             state.gns.notify_spawn(pos);
             state.total_spent += state.game.constants.ship_cost; // assuming the spawn is always successful (it should be...)

@@ -53,15 +53,23 @@ fn deliver(id: ShipId) -> Box<impl BtNode<GameState>> {
         if !stuck_move(id, state) {
             let [c0, cn, cs, ce, cw] = state.get_return_dir_costs(pos);
 
-            let ok_n = !state.mp.is_occupied(pos.directional_offset(Direction::North));
-            let ok_s = !state.mp.is_occupied(pos.directional_offset(Direction::South));
-            let ok_e = !state.mp.is_occupied(pos.directional_offset(Direction::East));
-            let ok_w = !state.mp.is_occupied(pos.directional_offset(Direction::West));
+            let ok_n = !state
+                .mp
+                .is_occupied(pos.directional_offset(Direction::North));
+            let ok_s = !state
+                .mp
+                .is_occupied(pos.directional_offset(Direction::South));
+            let ok_e = !state
+                .mp
+                .is_occupied(pos.directional_offset(Direction::East));
+            let ok_w = !state
+                .mp
+                .is_occupied(pos.directional_offset(Direction::West));
 
-            let cn = if ok_n {cn - c0} else {i32::max_value()};
-            let cs = if ok_s {cs - c0} else {i32::max_value()};
-            let ce = if ok_e {ce - c0} else {i32::max_value()};
-            let cw = if ok_w {cw - c0} else {i32::max_value()};
+            let cn = if ok_n { cn - c0 } else { i32::max_value() };
+            let cs = if ok_s { cs - c0 } else { i32::max_value() };
+            let ce = if ok_e { ce - c0 } else { i32::max_value() };
+            let cw = if ok_w { cw - c0 } else { i32::max_value() };
             state.gns.plan_move(id, pos, harvest, cn, cs, ce, cw);
         }
 
@@ -100,21 +108,27 @@ fn go_home(id: ShipId) -> Box<impl BtNode<GameState>> {
                 }
                 _ => {}
             }
-
-
         }
 
         let [c0, cn, cs, ce, cw] = state.get_return_dir_costs(pos);
 
-        let ok_n = !state.mp.is_occupied(pos.directional_offset(Direction::North));
-        let ok_s = !state.mp.is_occupied(pos.directional_offset(Direction::South));
-        let ok_e = !state.mp.is_occupied(pos.directional_offset(Direction::East));
-        let ok_w = !state.mp.is_occupied(pos.directional_offset(Direction::West));
+        let ok_n = !state
+            .mp
+            .is_occupied(pos.directional_offset(Direction::North));
+        let ok_s = !state
+            .mp
+            .is_occupied(pos.directional_offset(Direction::South));
+        let ok_e = !state
+            .mp
+            .is_occupied(pos.directional_offset(Direction::East));
+        let ok_w = !state
+            .mp
+            .is_occupied(pos.directional_offset(Direction::West));
 
-        let cn = if ok_n {cn - c0} else {i32::max_value()};
-        let cs = if ok_s {cs - c0} else {i32::max_value()};
-        let ce = if ok_e {ce - c0} else {i32::max_value()};
-        let cw = if ok_w {cw - c0} else {i32::max_value()};
+        let cn = if ok_n { cn - c0 } else { i32::max_value() };
+        let cs = if ok_s { cs - c0 } else { i32::max_value() };
+        let ce = if ok_e { ce - c0 } else { i32::max_value() };
+        let cw = if ok_w { cw - c0 } else { i32::max_value() };
         let c0 = state.config.navigation.return_step_cost as i32;
         state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 
@@ -135,7 +149,9 @@ fn go_to(id: ShipId, dest: Position) -> Box<impl BtNode<GameState>> {
         }
 
         let costs = state.get_dijkstra_move(pos, dest);
-        state.gns.plan_move(id, pos, costs[4], costs[2], costs[3], costs[1], costs[0]);
+        state
+            .gns
+            .plan_move(id, pos, costs[4], costs[2], costs[3], costs[1], costs[0]);
 
         BtState::Running
     })
@@ -222,45 +238,11 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
         let current_halite = state.halite_gain(&pos) * state.game.constants.extract_ratio; // factor inspiration into current_halite
         let phi0 = state.get_pheromone(pos);
 
-        Log::log(&format!("{:?}", id));
+        /*Log::log(&format!("{:?}", id));
         Log::log(&format!(
             "    @ {:?}: {} halite; {} pheromone",
             pos, current_halite, phi0
-        ));
-
-        /*let (d, h) = Direction::get_all_cardinals().into_iter()
-            .map(|d| (d, pos.directional_offset(d)))
-            .map(|(d, p)| {
-                let target_halite = state.game.map.at_position(&p).halite;
-                let phi = state.get_pheromone(p);
-                let bias = 50.min(state.halite_percentiles[75]);
-                let x = if p == syp || state.navi.is_unsafe(&p) {
-                    -f64::INFINITY
-                } else {
-                    0.1 * (- 1.0 * current_halite as f64 + 0.15 * target_halite as f64 + phi * 0.01)
-                };
-                Log::log(&format!("    - {:?}: {} ... {} halite; {} pheromone", p, x, target_halite, phi));
-                (d, x)
-            })
-            .map(|(d, x)| (d, sigmoid(x)))
-            .inspect(|x| Log::log(&format!("{:?}", x)))
-            .max_by(|&(_, activation1), &(_, activation2)|
-            if activation1 < activation2 {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Greater
-            })
-            .unwrap();
-
-        let h0 = 1.0 - h;
-
-        if h0 >= h {
-            state.move_ship(id, Direction::Still);
-            return BtState::Running;
-        } else {
-            state.move_ship(id, d);
-            return BtState::Running;
-        }*/
+        ));*/
 
         let mut weights: Vec<_> = if cargo < mc {
             vec![9999999.0, 0.0, 0.0, 0.0, 0.0]
@@ -272,7 +254,12 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
                 .collect()
         };
 
-        if current_halite < 1 && weights[0] < 1.0 && weights[1] < 1.0 && weights[2] < 1.0 && weights[3] < 1.0 {
+        if current_halite < 1
+            && weights[0] < 1.0
+            && weights[1] < 1.0
+            && weights[2] < 1.0
+            && weights[3] < 1.0
+        {
             weights[4] = -9999999.0; // no loitering on empty cells
             let [c0, cn, cs, ce, cw] = state.get_return_dir_costs(pos);
             weights[0] += 0.1 * (cw - c0) as f64;
@@ -289,22 +276,42 @@ fn greedy(id: ShipId) -> Box<impl BtNode<GameState>> {
 
         //Log::log(&format!("    {:?}", weights));
 
-        let ok_n = !state.mp.is_occupied(pos.directional_offset(Direction::North));
-        let ok_s = !state.mp.is_occupied(pos.directional_offset(Direction::South));
-        let ok_e = !state.mp.is_occupied(pos.directional_offset(Direction::East));
-        let ok_w = !state.mp.is_occupied(pos.directional_offset(Direction::West));
+        let ok_n = !state
+            .mp
+            .is_occupied(pos.directional_offset(Direction::North));
+        let ok_s = !state
+            .mp
+            .is_occupied(pos.directional_offset(Direction::South));
+        let ok_e = !state
+            .mp
+            .is_occupied(pos.directional_offset(Direction::East));
+        let ok_w = !state
+            .mp
+            .is_occupied(pos.directional_offset(Direction::West));
 
-        let cn = if ok_n {-(weights[2] * 100.0) as i32} else {i32::max_value()};
-        let cs = if ok_s {-(weights[3] * 100.0) as i32} else {i32::max_value()};
-        let ce = if ok_e {-(weights[1] * 100.0) as i32} else {i32::max_value()};
-        let cw = if ok_w {-(weights[0] * 100.0) as i32} else {i32::max_value()};
+        let cn = if ok_n {
+            -(weights[2] * 100.0) as i32
+        } else {
+            i32::max_value()
+        };
+        let cs = if ok_s {
+            -(weights[3] * 100.0) as i32
+        } else {
+            i32::max_value()
+        };
+        let ce = if ok_e {
+            -(weights[1] * 100.0) as i32
+        } else {
+            i32::max_value()
+        };
+        let cw = if ok_w {
+            -(weights[0] * 100.0) as i32
+        } else {
+            i32::max_value()
+        };
         let c0 = -(weights[4] * 100.0) as i32;
 
-        state.gns.plan_move(
-            id,
-            pos,
-            c0, cn, cs, ce, cw
-        );
+        state.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 
         BtState::Running
     })
@@ -362,7 +369,10 @@ pub fn build_dropoff(id: ShipId) -> Box<impl BtNode<GameState>> {
 pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
     continuous(select(vec![
         interrupt(
-            sequence(vec![select(vec![/*battle_camper(id), */greedy(id)]), deliver(id)]),
+            sequence(vec![
+                select(vec![/*battle_camper(id), */ greedy(id)]),
+                deliver(id),
+            ]),
             move |env| {
                 let dist = env.get_return_distance(env.get_ship(id).position);
                 env.rounds_left()
@@ -376,16 +386,18 @@ pub fn collector(id: ShipId) -> Box<impl BtNode<GameState>> {
 }
 
 pub fn battle_camper(id: ShipId) -> Box<impl BtNode<GameState>> {
-    let mut target = Rc::new(Cell::new((Position{x:4, y:4}, Position{x:5, y:5})));
+    let mut target = Rc::new(Cell::new((
+        Position { x: 4, y: 4 },
+        Position { x: 5, y: 5 },
+    )));
 
     sequence(vec![
         // 1. find target
         {
             let target = target.clone();
             lambda(move |state: &mut GameState| {
-
                 if state.rounds_left() > 200 {
-                    return BtState::Failure
+                    return BtState::Failure;
                 }
 
                 match state.camps.assign_ship(id) {
@@ -393,11 +405,10 @@ pub fn battle_camper(id: ShipId) -> Box<impl BtNode<GameState>> {
                         target.replace(p);
                         BtState::Success
                     }
-                    None => BtState::Failure
+                    None => BtState::Failure,
                 }
             })
         },
-
         // 2. go to target
         {
             let target = target.clone();
@@ -414,12 +425,13 @@ pub fn battle_camper(id: ShipId) -> Box<impl BtNode<GameState>> {
                 }
 
                 let costs = state.get_dijkstra_move(pos, dest);
-                state.gns.plan_move(id, pos, costs[4], costs[2], costs[3], costs[1], costs[0]);
+                state
+                    .gns
+                    .plan_move(id, pos, costs[4], costs[2], costs[3], costs[1], costs[0]);
 
                 BtState::Running
             })
         },
-
         // 3. wait...
         {
             let target = target.clone();
@@ -430,61 +442,158 @@ pub fn battle_camper(id: ShipId) -> Box<impl BtNode<GameState>> {
 
                 let center = target.get().0;
 
-                let p1 = state.game.map.normalize(&Position{x: center.x - 1, y: center.y - 1});
-                let p2 = state.game.map.normalize(&Position{x: center.x + 1, y: center.y + 1});
+                let p1 = state.game.map.normalize(&Position {
+                    x: center.x - 1,
+                    y: center.y - 1,
+                });
+                let p2 = state.game.map.normalize(&Position {
+                    x: center.x + 1,
+                    y: center.y + 1,
+                });
 
-                if state.ship_map[p1.y as usize][p1.x as usize].is_none() || state.ship_map[p2.y as usize][p2.x as usize].is_none() {
-                    return BtState::Running
+                if state.ship_map[p1.y as usize][p1.x as usize].is_none()
+                    || state.ship_map[p2.y as usize][p2.x as usize].is_none()
+                {
+                    return BtState::Running;
                 }
 
-                let p_n = state.game.map.normalize(&Position{x: center.x, y: center.y - 2});
-                let p_s = state.game.map.normalize(&Position{x: center.x, y: center.y + 2});
-                let p_e = state.game.map.normalize(&Position{x: center.x + 2, y: center.y});
-                let p_w = state.game.map.normalize(&Position{x: center.x - 2, y: center.y});
+                let p_n = state.game.map.normalize(&Position {
+                    x: center.x,
+                    y: center.y - 2,
+                });
+                let p_s = state.game.map.normalize(&Position {
+                    x: center.x,
+                    y: center.y + 2,
+                });
+                let p_e = state.game.map.normalize(&Position {
+                    x: center.x + 2,
+                    y: center.y,
+                });
+                let p_w = state.game.map.normalize(&Position {
+                    x: center.x - 2,
+                    y: center.y,
+                });
 
-                let cargo_n = state.ship_map[p_n.y as usize][p_n.x as usize].map(|id| state.game.ships[&id].halite).unwrap_or(0);
-                let cargo_s = state.ship_map[p_s.y as usize][p_s.x as usize].map(|id| state.game.ships[&id].halite).unwrap_or(0);
-                let cargo_e = state.ship_map[p_e.y as usize][p_e.x as usize].map(|id| state.game.ships[&id].halite).unwrap_or(0);
-                let cargo_w = state.ship_map[p_w.y as usize][p_w.x as usize].map(|id| state.game.ships[&id].halite).unwrap_or(0);
+                let cargo_n = state.ship_map[p_n.y as usize][p_n.x as usize]
+                    .map(|id| state.game.ships[&id].halite)
+                    .unwrap_or(0);
+                let cargo_s = state.ship_map[p_s.y as usize][p_s.x as usize]
+                    .map(|id| state.game.ships[&id].halite)
+                    .unwrap_or(0);
+                let cargo_e = state.ship_map[p_e.y as usize][p_e.x as usize]
+                    .map(|id| state.game.ships[&id].halite)
+                    .unwrap_or(0);
+                let cargo_w = state.ship_map[p_w.y as usize][p_w.x as usize]
+                    .map(|id| state.game.ships[&id].halite)
+                    .unwrap_or(0);
 
                 match (pos.x - center.x, pos.y - center.y) {
-                    (-1, -1) if cargo_n >= MIN_CARGO => state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), i32::max_value(), 0, i32::max_value()),
+                    (-1, -1) if cargo_n >= MIN_CARGO => state.gns.plan_move(
+                        id,
+                        pos,
+                        i32::max_value(),
+                        i32::max_value(),
+                        i32::max_value(),
+                        0,
+                        i32::max_value(),
+                    ),
                     (1, 1) if cargo_n >= MIN_CARGO => {
-                        state.gns.plan_move(id, pos, i32::max_value(), 0, i32::max_value(), i32::max_value(), i32::max_value());
-                        return BtState::Success
+                        state.gns.plan_move(
+                            id,
+                            pos,
+                            i32::max_value(),
+                            0,
+                            i32::max_value(),
+                            i32::max_value(),
+                            i32::max_value(),
+                        );
+                        return BtState::Success;
                     }
 
-                    (-1, -1) if cargo_w >= MIN_CARGO => state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), 0, i32::max_value(), i32::max_value()),
+                    (-1, -1) if cargo_w >= MIN_CARGO => state.gns.plan_move(
+                        id,
+                        pos,
+                        i32::max_value(),
+                        i32::max_value(),
+                        0,
+                        i32::max_value(),
+                        i32::max_value(),
+                    ),
                     (1, 1) if cargo_w >= MIN_CARGO => {
-                        state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value(), 0);
-                        return BtState::Success
+                        state.gns.plan_move(
+                            id,
+                            pos,
+                            i32::max_value(),
+                            i32::max_value(),
+                            i32::max_value(),
+                            i32::max_value(),
+                            0,
+                        );
+                        return BtState::Success;
                     }
 
-                    (1, 1) if cargo_s >= MIN_CARGO => state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value(), 0),
+                    (1, 1) if cargo_s >= MIN_CARGO => state.gns.plan_move(
+                        id,
+                        pos,
+                        i32::max_value(),
+                        i32::max_value(),
+                        i32::max_value(),
+                        i32::max_value(),
+                        0,
+                    ),
                     (-1, -1) if cargo_s >= MIN_CARGO => {
-                        state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), 0, i32::max_value(), i32::max_value());
-                        return BtState::Success
+                        state.gns.plan_move(
+                            id,
+                            pos,
+                            i32::max_value(),
+                            i32::max_value(),
+                            0,
+                            i32::max_value(),
+                            i32::max_value(),
+                        );
+                        return BtState::Success;
                     }
 
-                    (1, 1) if cargo_e >= MIN_CARGO => state.gns.plan_move(id, pos, i32::max_value(), 0, i32::max_value(), i32::max_value(), i32::max_value()),
+                    (1, 1) if cargo_e >= MIN_CARGO => state.gns.plan_move(
+                        id,
+                        pos,
+                        i32::max_value(),
+                        0,
+                        i32::max_value(),
+                        i32::max_value(),
+                        i32::max_value(),
+                    ),
                     (-1, -1) if cargo_e >= MIN_CARGO => {
-                        state.gns.plan_move(id, pos, i32::max_value(), i32::max_value(), i32::max_value(), 0, i32::max_value());
-                        return BtState::Success
+                        state.gns.plan_move(
+                            id,
+                            pos,
+                            i32::max_value(),
+                            i32::max_value(),
+                            i32::max_value(),
+                            0,
+                            i32::max_value(),
+                        );
+                        return BtState::Success;
                     }
 
-                    _ => state.gns.plan_move(id, pos, 0, i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value()),
+                    _ => state.gns.plan_move(
+                        id,
+                        pos,
+                        0,
+                        i32::max_value(),
+                        i32::max_value(),
+                        i32::max_value(),
+                        i32::max_value(),
+                    ),
                 }
 
                 BtState::Running
             })
         },
-
         // 4. collect...
         {
             let target = target.clone();
-            lambda(move |state: &mut GameState| {
-                BtState::Failure
-            })
+            lambda(move |state: &mut GameState| BtState::Failure)
         },
     ])
 }
