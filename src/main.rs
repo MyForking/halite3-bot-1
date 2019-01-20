@@ -701,6 +701,9 @@ impl Commander {
                 .ships
                 .iter()
                 .filter(|&&id| {
+                    state.game.map.at_entity(state.get_ship(id)).structure.is_none()
+                })
+                .filter(|&&id| {
                     state.distance_to_nearest_dropoff(id)
                         >= state.config.expansion.expansion_distance
                 })
