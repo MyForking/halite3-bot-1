@@ -1,4 +1,9 @@
 {
+  "strategy": {
+    "spawn_halite_floor": 0,
+    "spawn_min_rounds_left_factor": 2
+  },
+
   "expansion": {
     "expansion_distance": 15,
     "min_halite_density": 125,

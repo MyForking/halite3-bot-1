@@ -737,21 +737,12 @@ impl Commander {
             ai.tick(state);
         }
 
-        let mut want_ship = if state.game.turn_number > 100 {
-            // average halite collected per ship in the last n turns
-            let avg_collected = state.collect_statistic
-                [state.game.turn_number - state.config.statistics.halite_collection_window..]
-                .iter()
-                .sum::<f64>()
-                / state.config.statistics.halite_collection_window as f64;
+        let mut want_ship = {
+            let bias = state.config.strategy.spawn_halite_floor;
+            let halite_left: usize = state.game.map.iter().map(|cell| cell.halite.max(bias) - bias).sum();
+            let n_ships = state.game.ships.len() + 1;
 
-            let predicted_profit = avg_collected * state.rounds_left() as f64;
-
-            let a = predicted_profit as usize > state.game.constants.ship_cost * 2; // safety factor...
-            let b = state.rounds_left() > 100;
-            a && b
-        } else {
-            true
+            (halite_left / n_ships > state.game.constants.ship_cost) && state.rounds_left() > state.game.map.width * state.config.strategy.spawn_min_rounds_left_factor
         };
 
         want_ship &= !want_dropoff

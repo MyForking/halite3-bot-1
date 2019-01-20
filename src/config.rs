@@ -4,11 +4,18 @@ use std::io::BufReader;
 
 #[derive(Deserialize)]
 pub struct Config {
+    pub strategy: Strategy,
     pub expansion: Expansion,
     pub navigation: Navigation,
     pub pheromones: Pheromones,
     pub statistics: Statistics,
     pub ships: Ships,
+}
+
+#[derive(Deserialize)]
+pub struct Strategy {
+    pub spawn_halite_floor: usize,
+    pub spawn_min_rounds_left_factor: usize,
 }
 
 #[derive(Deserialize)]
