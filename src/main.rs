@@ -737,13 +737,6 @@ impl Commander {
             ai.tick(state);
         }
 
-        let enemy_blocks = state
-            .game
-            .ships
-            .values()
-            .filter(|ship| ship.owner != state.me().id)
-            .any(|ship| ship.position == state.me().shipyard.position);
-
         let mut want_ship = if state.game.turn_number > 100 {
             // average halite collected per ship in the last n turns
             let avg_collected = state.collect_statistic
@@ -765,9 +758,7 @@ impl Commander {
             || state.me().halite
                 >= state.game.constants.dropoff_cost + state.game.constants.ship_cost;
 
-        if enemy_blocks && state.me().halite >= state.game.constants.ship_cost
-            || (want_ship && state.navi.is_safe(&state.me().shipyard.position))
-                && state.me().halite >= state.game.constants.ship_cost
+        if want_ship && state.me().halite >= state.game.constants.ship_cost
         {
             let pos = state.me().shipyard.position;
             state.gns.notify_spawn(pos);
