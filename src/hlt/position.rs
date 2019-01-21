@@ -42,7 +42,6 @@ impl Position {
             (0, dy) if dy == 1 - height => Some(Direction::South),
             (dx, 0) if dx == width - 1 => Some(Direction::West),
             (dx, 0) if dx == 1 - width => Some(Direction::East),
-            (0, 0) => Some(Direction::Still),
             _ => panic!("relative_to({:?}, {:?})", self, other),
         }
     }

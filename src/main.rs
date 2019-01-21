@@ -7,8 +7,6 @@ extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
 
-use behavior_tree::BtNode;
-use bt_tasks::{build_dropoff, collector};
 use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::game::Game;
@@ -21,18 +19,20 @@ use hlt::ship::Ship;
 use hlt::ShipId;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
-use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::collections::{BinaryHeap, HashMap};
 use std::env;
 use std::io::prelude::*;
 //use std::time::SystemTime;
 //use std::time::UNIX_EPOCH;
 
-mod behavior_tree;
-mod bt_tasks;
+mod ai_manager;
+mod commander;
 mod config;
 mod hlt;
 mod movement_predictor;
 mod navigation_system;
+mod pda;
+mod ship_ai;
 
 #[derive(Debug, Eq, PartialEq)]
 struct DijkstraMinNode<C: Ord, T: Eq> {
@@ -55,83 +55,6 @@ impl<C: Ord, T: Eq> std::cmp::Ord for DijkstraMinNode<C, T> {
 impl<C: Ord, T: Eq> DijkstraMinNode<C, T> {
     fn new(cost: C, data: T) -> Self {
         DijkstraMinNode { cost, data }
-    }
-}
-
-struct Camp {
-    pos: [Position; 2],
-    guards: [Option<ShipId>; 2],
-}
-
-impl Camp {
-    fn new(p: Position) -> Self {
-        Camp {
-            pos: [
-                Position {
-                    x: p.x - 1,
-                    y: p.y - 1,
-                },
-                Position {
-                    x: p.x + 1,
-                    y: p.y + 1,
-                },
-            ],
-            guards: [None; 2],
-        }
-    }
-}
-
-struct Camps {
-    camps: HashMap<Position, Camp>,
-}
-
-impl Camps {
-    fn new() -> Self {
-        Camps {
-            camps: HashMap::new(),
-        }
-    }
-
-    fn update_frame(&mut self, game: &Game) {
-        let shipyards = game
-            .players
-            .iter()
-            .filter(|player| player.id != game.my_id)
-            .map(|player| player.shipyard.position);
-
-        let dropoffs = game
-            .dropoffs
-            .values()
-            .filter(|dropoff| dropoff.owner != game.my_id)
-            .map(|dropoff| dropoff.position);
-
-        for pos in shipyards.chain(dropoffs) {
-            self.camps.entry(pos).or_insert_with(|| Camp::new(pos));
-        }
-    }
-
-    fn assign_ship(&mut self, id: ShipId) -> Option<(Position, Position)> {
-        for (&pos, camp) in self.camps.iter_mut() {
-            for (&p, g) in camp.pos.iter().zip(&mut camp.guards) {
-                if g.is_none() {
-                    *g = Some(id);
-                    return Some((pos, p));
-                }
-            }
-        }
-        None
-    }
-
-    fn remove_ship(&mut self, id: ShipId) {
-        for camp in self.camps.values_mut() {
-            for g in &mut camp.guards {
-                let clear = if let Some(i) = g { *i == id } else { false };
-
-                if clear {
-                    *g = None;
-                }
-            }
-        }
     }
 }
 
@@ -170,9 +93,6 @@ pub struct GameState {
 
     halite_percentiles: Vec<usize>,
     avg_return_length: f64,
-
-    #[serde(skip)]
-    camps: Camps,
 }
 
 impl GameState {
@@ -200,8 +120,6 @@ impl GameState {
             halite_percentiles: vec![0; 101],
             avg_return_length: 0.0,
 
-            camps: Camps::new(),
-
             game,
         };
 
@@ -218,7 +136,6 @@ impl GameState {
             self.ship_map[pos.y as usize][pos.x as usize] = Some(id);
         }
 
-        self.camps.update_frame(&self.game);
         self.navi.update_frame(&self.game);
         self.mp.update_frame(&self.game);
         self.gns.clear();
@@ -370,56 +287,6 @@ impl GameState {
         } else {
             gain
         }
-    }
-
-    fn can_move(&self, id: ShipId) -> bool {
-        let ship = self.get_ship(id);
-        ship.halite >= self.movement_cost(&ship.position)
-    }
-
-    fn get_nearest_halite_move(&self, start: Position, min_halite: usize) -> Option<Direction> {
-        let mut queue = VecDeque::new();
-        for d in Direction::get_all_cardinals() {
-            let p = start.directional_offset(d);
-            queue.push_back((p, d));
-        }
-        let mut visited = HashSet::new();
-        while let Some((mut p, d)) = queue.pop_front() {
-            p = self.game.map.normalize(&p);
-            if visited.contains(&p) {
-                continue;
-            }
-            visited.insert(p);
-            if p == self.me().shipyard.position {
-                continue;
-            }
-            if self.navi.is_unsafe(&p) {
-                continue;
-            }
-            if self.game.map.at_position(&p).halite >= min_halite {
-                return Some(d);
-            }
-            for dn in Direction::get_all_cardinals() {
-                let pn = p.directional_offset(dn);
-                queue.push_back((pn, d));
-            }
-        }
-        None
-    }
-
-    fn get_return_dir(&self, pos: Position) -> Direction {
-        self.return_map_directions[pos.y as usize][pos.x as usize]
-    }
-
-    fn get_return_dir_alternative(&self, pos: Position) -> Direction {
-        let original = self.get_return_dir(pos);
-        Direction::get_all_cardinals()
-            .iter()
-            .filter(|&&d| d != original)
-            .map(|&d| (d, self.game.map.normalize(&pos.directional_offset(d))))
-            .min_by_key(|(_, p)| self.return_cumultive_costs[p.y as usize][p.x as usize])
-            .unwrap()
-            .0
     }
 
     fn get_return_dir_costs(&self, pos: Position) -> [i32; 5] {
@@ -653,7 +520,7 @@ impl GameState {
     }
 }
 
-struct Commander {
+/*struct Commander {
     new_ships: HashSet<ShipId>,
     lost_ships: HashSet<ShipId>,
     ships: HashSet<ShipId>,
@@ -768,41 +635,40 @@ impl Commander {
             let pos = state.game.dropoffs[&id].position;
             state.push(pos);
         }*/
-
-        for (&id, ai) in &mut self.ship_ais {
-            ai.tick(state);
-        }
-
-        let mut want_ship = {
-            let bias = state.config.strategy.spawn_halite_floor;
-            let halite_left: usize = state
-                .game
-                .map
-                .iter()
-                .map(|cell| cell.halite.max(bias) - bias)
-                .sum();
-            let n_ships = state.game.ships.len() + 1;
-
-            (halite_left / n_ships > state.game.constants.ship_cost)
-                && state.rounds_left()
-                    > state.game.map.width * state.config.strategy.spawn_min_rounds_left_factor
-        };
-
-        want_ship &= !want_dropoff
-            || state.me().halite
-                >= state.game.constants.dropoff_cost + state.game.constants.ship_cost;
-
-        if want_ship && state.me().halite >= state.game.constants.ship_cost {
-            let pos = state.me().shipyard.position;
-            state.gns.notify_spawn(pos);
-            state.total_spent += state.game.constants.ship_cost; // assuming the spawn is always successful (it should be...)
-        }
-
-        state.gns.solve_moves();
-
-        state.command_queue.extend(state.gns.execute());
-    }
+for (&id, ai) in &mut self.ship_ais {
+ai.tick(state);
 }
+
+let mut want_ship = {
+let bias = state.config.strategy.spawn_halite_floor;
+let halite_left: usize = state
+.game
+.map
+.iter()
+.map(|cell| cell.halite.max(bias) - bias)
+.sum();
+let n_ships = state.game.ships.len() + 1;
+
+(halite_left / n_ships > state.game.constants.ship_cost)
+&& state.rounds_left()
+> state.game.map.width * state.config.strategy.spawn_min_rounds_left_factor
+};
+
+want_ship &= !want_dropoff
+|| state.me().halite
+>= state.game.constants.dropoff_cost + state.game.constants.ship_cost;
+
+if want_ship && state.me().halite >= state.game.constants.ship_cost {
+let pos = state.me().shipyard.position;
+state.gns.notify_spawn(pos);
+state.total_spent += state.game.constants.ship_cost; // assuming the spawn is always successful (it should be...)
+}
+
+state.gns.solve_moves();
+
+state.command_queue.extend(state.gns.execute());
+}
+}*/
 
 fn main() {
     /*let rng_seed: u64 = if args.len() > 1 {
@@ -845,15 +711,13 @@ fn main() {
 
     Log::log(&format!("using config file: {}", cfg_file));
 
-    let mut commander = Commander::new();
+    let mut ai_mgr = ai_manager::AiManager::new();
     let mut game = GameState::new(&cfg_file);
 
     loop {
         game.update_frame();
 
-        commander.sync(&game);
-
-        commander.process_frame(&mut game);
+        ai_mgr.think(&mut game);
 
         game.finalize_frame(&runid, dump_file.as_ref().map(String::as_ref));
     }

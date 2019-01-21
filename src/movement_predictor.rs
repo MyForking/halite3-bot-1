@@ -1,26 +1,25 @@
-use hlt::direction::Direction;
 use hlt::game::Game;
 use hlt::map_cell::Structure;
 use hlt::position::Position;
-use hlt::ShipId;
-use std::collections::HashMap;
-use std::mem;
+//use hlt::ShipId;
+//use std::collections::HashMap;
+//use std::mem;
 
-struct ShipInfo {
+/*struct ShipInfo {
     pos: Position,
     last_pos: Position,
     cargo: usize,
-}
+}*/
 
 pub struct MovementPredictor {
-    ships: HashMap<ShipId, ShipInfo>,
+    //ships: HashMap<ShipId, ShipInfo>,
     probs: Vec<Vec<f64>>,
 }
 
 impl MovementPredictor {
     pub fn new(w: usize, h: usize) -> Self {
         MovementPredictor {
-            ships: HashMap::new(),
+            //ships: HashMap::new(),
             probs: vec![vec![0.0; w]; h],
         }
     }
@@ -32,14 +31,14 @@ impl MovementPredictor {
             }
         }
 
-        let prev_ships = mem::replace(&mut self.ships, HashMap::with_capacity(game.ships.len()));
+        //let prev_ships = mem::replace(&mut self.ships, HashMap::with_capacity(game.ships.len()));
 
-        for (&id, ship) in &game.ships {
+        for (&_id, ship) in &game.ships {
             if ship.owner == game.my_id {
                 continue;
             }
             let pos = ship.position;
-            let cargo = ship.halite;
+            /*let cargo = ship.halite;
             let last_pos = prev_ships.get(&id).map(|si| si.pos).unwrap_or(pos);
             self.ships.insert(
                 id,
@@ -48,7 +47,7 @@ impl MovementPredictor {
                     last_pos,
                     cargo,
                 },
-            );
+            );*/
 
             self.probs[pos.y as usize][pos.x as usize] = match game.map.at_position(&pos).structure
             {

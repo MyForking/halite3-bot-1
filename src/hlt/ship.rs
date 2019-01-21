@@ -1,5 +1,4 @@
 use hlt::command::Command;
-use hlt::direction::Direction;
 use hlt::entity::Entity;
 use hlt::input::Input;
 use hlt::position::Position;
@@ -26,21 +25,6 @@ impl Ship {
     pub fn make_dropoff(&mut self) -> Command {
         Command::transform_ship_into_dropoff_site(self.id)
     }
-
-    /*pub fn move_ship(&mut self, direction: Direction) {
-        self.command = Some(Command::move_ship(self.id, direction));
-    }
-
-    pub fn stay_still(&mut self) {
-        self.command = Some(Command::move_ship(self.id, Direction::Still));
-    }*/
-
-    /*pub fn is_moving(&mut self) -> bool {
-        self.command
-            .as_ref()
-            .map(|cmd| cmd.0.starts_with('m'))
-            .unwrap_or(false)
-    }*/
 
     pub fn generate(input: &mut Input, player_id: PlayerId, max_halite: usize) -> Ship {
         input.read_and_parse_line();

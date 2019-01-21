@@ -6,7 +6,6 @@ use hlt::command::Command;
 use hlt::direction::Direction;
 use hlt::log::Log;
 use hlt::position::Position;
-use hlt::ship::Ship;
 use hlt::ShipId;
 
 enum Action {
@@ -87,10 +86,10 @@ impl NavigationSystem {
         let pe = self.pos(pos.directional_offset(Direction::East));
         let pw = self.pos(pos.directional_offset(Direction::West));
 
-        Log::log(&format!(
+        /*Log::log(&format!(
             "planned move {:?} @ {:?}: {:?}, {:?}, {:?}, {:?}, {:?}",
             id, p0, stay_cost, n_cost, s_cost, e_cost, w_cost
-        ));
+        ));*/
         //Log::log(&format!("{:?}", self.positions));
 
         self.ships.insert(
@@ -146,7 +145,7 @@ impl NavigationSystem {
             Log::log(&format!("{:?}", row));
         }*/
 
-        let (total_neg_cost, assignments) = kuhn_munkres(&weights);
+        let (_total_neg_cost, assignments) = kuhn_munkres(&weights);
 
         //Log::log(&format!("{:?}", assignments));
 
@@ -155,12 +154,12 @@ impl NavigationSystem {
         self.final_actions = actors
             .iter()
             .zip(&assignments)
-            .inspect(|((actor, pc), i)| {
+            /*.inspect(|((actor, pc), i)| {
                 Log::log(&format!(
                     "{:?} {:?} -> {:?}",
                     actor, pc, self.positions[**i]
                 ));
-            })
+            })*/
             .map(|((actor, pc), &i)| match actor {
                 &Actor::Ship(id) => Action::Move(
                     id,
