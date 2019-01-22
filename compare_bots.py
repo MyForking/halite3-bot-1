@@ -17,9 +17,9 @@ def run_game(bots, s):
 if __name__ == '__main__':
 
     bots = ['./target/release/my_bot',
-            #'./old_bots/v23 -c old_bots/v23.cfg.json',
-            #'./old_bots/v23 -c old_bots/v23.cfg.json',
-            './old_bots/v23 -c old_bots/v23.cfg.json']
+            #'./old_bots/v24 -c old_bots/v24.cfg.json',
+            #'./old_bots/v24 -c old_bots/v24.cfg.json',
+            './old_bots/v24 -c old_bots/v24.cfg.json']
 
     size = '32'
 
