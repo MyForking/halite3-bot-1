@@ -249,6 +249,9 @@ impl ShipAiState for Deliver {
         if !stuck_move(id, world) {
             let [c0, cn, cs, ce, cw] = world.get_return_dir_costs(pos);
 
+            let ok_0 = !world
+                .mp
+                .is_reachable(pos);
             let ok_n = !world
                 .mp
                 .is_reachable(pos.directional_offset(Direction::North));
@@ -266,7 +269,8 @@ impl ShipAiState for Deliver {
             let cs = if ok_s { cs - c0 } else { i32::max_value() };
             let ce = if ok_e { ce - c0 } else { i32::max_value() };
             let cw = if ok_w { cw - c0 } else { i32::max_value() };
-            world.gns.plan_move(id, pos, harvest, cn, cs, ce, cw);
+            let c0 = if ok_0 { harvest } else { i32::max_value() };
+            world.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
         }
 
         let ev = world.config.pheromones.ship_evaporation;
