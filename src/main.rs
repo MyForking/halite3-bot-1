@@ -232,6 +232,14 @@ impl GameState {
         self.game.ships.values().find(|ship| ship.position == pos)
     }
 
+    fn find_nearest_ship(&self, pos: Position) -> Option<ShipId> {
+        self.my_ships()
+            .map(|id| (id, self.get_ship(id).position))
+            .map(|(id, p)| (id, self.game.map.calculate_distance(&pos, &p)))
+            .min_by_key(|(_, dist)| *dist)
+            .map(|(id, _)| id)
+    }
+
     fn find_nearest_oponent(&self, pos: Position, exclude_pos: bool) -> Option<ShipId> {
         let mut ships: Vec<_> = self.game.ships.values().filter(|ship| ship.owner != self.game.my_id).collect();
         ships.sort_unstable_by_key(|ship| self.game.map.calculate_distance(&pos, &ship.position));
@@ -243,8 +251,7 @@ impl GameState {
         }.map(|ship| ship.id)
     }
 
-    fn distance_to_nearest_dropoff(&self, id: ShipId) -> usize {
-        let pos = self.get_ship(id).position;
+    fn distance_to_nearest_dropoff(&self, pos: Position) -> usize {
         let dist = self
             .game
             .map
@@ -270,6 +277,10 @@ impl GameState {
     fn try_build_dropoff(&mut self, id: ShipId) -> bool {
         if self.me().halite < self.game.constants.dropoff_cost {
             return false;
+        }
+
+        if self.game.map.at_entity(self.get_ship(id)).structure != Structure::None {
+            return false
         }
 
         let cmd = self.get_ship_mut(id).make_dropoff();
@@ -304,6 +315,19 @@ impl GameState {
         } else {
             gain
         }
+    }
+
+    fn is_valid_expansion_location(&self, pos: Position) -> bool {
+        let pos = self.game.map.normalize(&pos);
+        let density = self.halite_density[pos.y as usize][pos.y as usize];
+        self.game
+            .map
+            .at_position(&pos)
+            .structure
+            .is_none()
+            && self.distance_to_nearest_dropoff(pos) >= self.config.expansion.expansion_distance
+            && density >= self.config.expansion.min_halite_density
+            && self.ships_in_range(pos, self.config.expansion.ship_radius).count() >= self.config.expansion.n_ships
     }
 
     fn get_return_dir_costs(&self, pos: Position) -> [i32; 5] {
@@ -536,156 +560,6 @@ impl GameState {
         self.pheromones[i][j]
     }
 }
-
-/*struct Commander {
-    new_ships: HashSet<ShipId>,
-    lost_ships: HashSet<ShipId>,
-    ships: HashSet<ShipId>,
-    ship_ais: HashMap<ShipId, Box<dyn BtNode<GameState>>>,
-}
-
-impl Commander {
-    fn new() -> Self {
-        Commander {
-            new_ships: HashSet::new(),
-            lost_ships: HashSet::new(),
-            ships: HashSet::new(),
-            ship_ais: HashMap::new(),
-        }
-    }
-
-    fn sync(&mut self, state: &GameState) {
-        let state_ships: HashSet<_> = state.my_ships().collect();
-
-        self.new_ships.extend(&state_ships - &self.ships);
-        self.lost_ships.extend(&self.ships - &state_ships);
-        self.ships = &self.ships & &state_ships;
-    }
-
-    fn process_frame(&mut self, state: &mut GameState) {
-        for id in self.lost_ships.drain() {
-            self.ship_ais.remove(&id);
-            state.camps.remove_ship(id);
-        }
-
-        for id in self.new_ships.drain() {
-            self.ships.insert(id);
-            self.ship_ais.insert(id, collector(id));
-        }
-
-        Log::log(&format!("commanding {} ships", self.ships.len()));
-
-        let syp = state.me().shipyard.position;
-
-        let (max_pos, max_density) = state
-            .halite_density
-            .iter()
-            .enumerate()
-            .flat_map(|(i, row)| row.iter().enumerate().map(move |(j, &x)| (i, j, x)))
-            .max_by_key(|(_, _, x)| *x)
-            .map(|(i, j, x)| {
-                (
-                    Position {
-                        x: j as i32,
-                        y: i as i32,
-                    },
-                    x,
-                )
-            })
-            .unwrap();
-
-        let want_dropoff = state.avg_return_length
-            >= state.config.expansion.expansion_distance as f64
-            && max_density >= state.config.expansion.min_halite_density;
-
-        if want_dropoff {
-            // create a massive pheromone spike at a good dropoff location
-            //state.add_pheromone(max_pos, 100000.0);
-            state.add_pheromone(max_pos, 100000.0);
-        }
-
-        if want_dropoff && state.me().halite >= state.game.constants.dropoff_cost {
-            let id = self
-                .ships
-                .iter()
-                .filter(|&&id| {
-                    state
-                        .game
-                        .map
-                        .at_entity(state.get_ship(id))
-                        .structure
-                        .is_none()
-                })
-                .filter(|&&id| {
-                    state.distance_to_nearest_dropoff(id)
-                        >= state.config.expansion.expansion_distance
-                })
-                .filter(|&&id| {
-                    state
-                        .ships_in_range(
-                            state.get_ship(id).position,
-                            state.config.expansion.ship_radius,
-                        )
-                        .count()
-                        >= state.config.expansion.n_ships
-                })
-                .map(|&id| {
-                    let p = state.get_ship(id).position;
-                    (
-                        id,
-                        state.halite_density[p.y as usize][p.x as usize],
-                        state.pheromones[p.y as usize][p.x as usize],
-                    )
-                })
-                .filter(|&(_, density, _)| density >= state.config.expansion.min_halite_density)
-                .max_by_key(|&(_, _, phi)| phi as i64)
-                .map(|(id, _, _)| id);
-
-            if let Some(id) = id {
-                *self.ship_ais.get_mut(&id).unwrap() = build_dropoff(id);
-            }
-        }
-
-        /*state.push(syp);
-
-        for id in state.me().dropoff_ids.clone() {
-            let pos = state.game.dropoffs[&id].position;
-            state.push(pos);
-        }*/
-for (&id, ai) in &mut self.ship_ais {
-ai.tick(state);
-}
-
-let mut want_ship = {
-let bias = state.config.strategy.spawn_halite_floor;
-let halite_left: usize = state
-.game
-.map
-.iter()
-.map(|cell| cell.halite.max(bias) - bias)
-.sum();
-let n_ships = state.game.ships.len() + 1;
-
-(halite_left / n_ships > state.game.constants.ship_cost)
-&& state.rounds_left()
-> state.game.map.width * state.config.strategy.spawn_min_rounds_left_factor
-};
-
-want_ship &= !want_dropoff
-|| state.me().halite
->= state.game.constants.dropoff_cost + state.game.constants.ship_cost;
-
-if want_ship && state.me().halite >= state.game.constants.ship_cost {
-let pos = state.me().shipyard.position;
-state.gns.notify_spawn(pos);
-state.total_spent += state.game.constants.ship_cost; // assuming the spawn is always successful (it should be...)
-}
-
-state.gns.solve_moves();
-
-state.command_queue.extend(state.gns.execute());
-}
-}*/
 
 fn main() {
     /*let rng_seed: u64 = if args.len() > 1 {

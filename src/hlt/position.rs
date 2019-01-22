@@ -31,6 +31,16 @@ impl Position {
         ]
     }
 
+    pub fn get_all_neighbors(&self) -> Vec<Position> {
+        vec![
+            self.directional_offset(Direction::West),
+            self.directional_offset(Direction::East),
+            self.directional_offset(Direction::North),
+            self.directional_offset(Direction::South),
+            *self
+        ]
+    }
+
     pub fn relative_to(&self, other: Position, width: i32, height: i32) -> Option<Direction> {
         match (self.x - other.x, self.y - other.y) {
             (0, -1) => Some(Direction::North),

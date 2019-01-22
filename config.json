@@ -6,9 +6,10 @@
 
   "expansion": {
     "expansion_distance": 15,
-    "min_halite_density": 125,
-    "ship_radius": 12,
-    "n_ships": 10
+    "return_distance": 10,
+    "min_halite_density": 200,
+    "ship_radius": 10,
+    "n_ships": 1
   },
 
   "navigation": {

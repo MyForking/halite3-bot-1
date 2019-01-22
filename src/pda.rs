@@ -41,8 +41,12 @@ impl<T> StateStack<T> {
         self.stack.push(item)
     }
 
-    pub fn top(&mut self) -> Option<&mut T> {
+    pub fn top_mut(&mut self) -> Option<&mut T> {
         self.stack.last_mut()
+    }
+
+    pub fn top(&self) -> Option<&T> {
+        self.stack.last()
     }
 
     pub fn is_empty(&self) -> bool {

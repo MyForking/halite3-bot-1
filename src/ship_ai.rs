@@ -2,6 +2,7 @@ use ai_manager::AiManager;
 use hlt::direction::Direction;
 use hlt::log::Log;
 use hlt::map_cell::Structure;
+use hlt::position::Position;
 use hlt::ShipId;
 use pda::{StackOp, StateStack};
 use GameState;
@@ -27,7 +28,7 @@ impl ShipAi {
                 self.states.transition(op);
             }
 
-            let op = self.states.top().unwrap().step(self.id, world);
+            let op = self.states.top_mut().unwrap().step(self.id, world);
             if let StackOp::None = op {
                 break
             } else {
@@ -39,10 +40,16 @@ impl ShipAi {
     pub fn push_task(&mut self, task: Box<dyn ShipAiState>) {
         self.states.push(task);
     }
+
+    pub fn top_state(&self) -> Option<&dyn ShipAiState> {
+        self.states.top().map(|boxed| boxed.as_ref())
+    }
 }
 
 pub trait ShipAiState: std::fmt::Debug {
     fn step(&mut self, id: ShipId, world: &mut GameState) -> StackOp<Box<dyn ShipAiState>>;
+
+    fn is_builder(&self) -> bool {false}
 }
 
 #[derive(Debug)]
@@ -339,20 +346,55 @@ impl ShipAiState for GoHome {
 }
 
 #[derive(Debug)]
-pub struct BuildDropoff;
+pub struct BuildDropoff {
+    target: Position,
+}
+
+impl BuildDropoff {
+    pub fn new(target: Position) -> Self {
+        BuildDropoff {
+            target
+        }
+    }
+}
 
 impl ShipAiState for BuildDropoff {
     fn step(&mut self, id: ShipId, world: &mut GameState) -> StackOp<Box<dyn ShipAiState>> {
-        // todo: move a few steps up the density gradient
-        if world.try_build_dropoff(id) {
-            Log::log(&format!("{:?} building dropoff", id));
+        if !world.is_valid_expansion_location(self.target) {
+            return StackOp::Done
+        }
+
+        Log::log(&format!("{:?} want to build at {:?}", id, self.target));
+
+        // create a massive pheromone spike at the dropoff location
+        world.add_pheromone(self.target, 10000000.0);
+
+        if stuck_move(id, world) {
+            return StackOp::None
+        }
+
+        let pos = world.get_ship(id).position;
+
+        if pos != self.target {
+            let mut costs = world.get_dijkstra_move(pos, self.target);
+            for c in &mut costs {
+                *c -= 10000;
+            }
+            world.gns.plan_move(id, pos, i32::max_value(), costs[2], costs[3], costs[1], costs[0]);
             StackOp::None
         } else {
-            // if it fails the commander will eventually tell us to try again. Otherwise, continue with previous task
-            Log::log(&format!("{:?} failed to build dropoff", id));
-            StackOp::Done
+            if world.try_build_dropoff(id) {
+                Log::log(&format!("{:?} building dropoff", id));
+                StackOp::None
+            } else {
+                // if it fails the commander will eventually tell us to try again. Otherwise, continue with previous task
+                Log::log(&format!("{:?} failed to build dropoff", id));
+                StackOp::Done
+            }
         }
     }
+
+    fn is_builder(&self) -> bool {true}
 }
 
 fn stuck_move(id: ShipId, state: &mut GameState) -> bool {

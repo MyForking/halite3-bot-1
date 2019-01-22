@@ -21,6 +21,7 @@ pub struct Strategy {
 #[derive(Deserialize)]
 pub struct Expansion {
     pub expansion_distance: usize,
+    pub return_distance: usize,
     pub min_halite_density: i32,
     pub ship_radius: usize,
     pub n_ships: usize,
