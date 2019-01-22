@@ -54,6 +54,8 @@ pub struct Ships {
     pub seek_greed_factor: f64,
     pub seek_return_cost_factor: f64,
     pub seek_pheromone_factor: f64,
+
+    pub carefulness_limit: i32,
 }
 
 #[derive(Deserialize)]

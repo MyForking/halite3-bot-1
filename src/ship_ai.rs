@@ -106,7 +106,15 @@ impl ShipAiState for Collect {
             weights[4] = current_halite as f64;
         }
 
-        let ok_n = !world
+        let mut costs: Vec<_> = Direction::get_all_options()
+            .into_iter()
+            .map(|d| pos.directional_offset(d))
+            .map(|p| if cargo <= world.config.ships.carefulness_limit {world.mp.is_occupied(p)} else {world.mp.is_reachable(p)})
+            .zip(weights)
+            .map(|(avoid, w)| if avoid {i32::max_value()} else {-(w * 100.0) as i32})
+            .collect();
+
+        /*let ok_n = !world
             .mp
             .is_occupied(pos.directional_offset(Direction::North));
         let ok_s = !world
@@ -138,8 +146,7 @@ impl ShipAiState for Collect {
             -(weights[0] * 100.0) as i32
         } else {
             i32::max_value()
-        };
-        let c0 = -(weights[4] * 100.0) as i32;
+        };*/
 
         let mut prey = vec![];
         for p in Direction::get_all_cardinals().into_iter().map(|d| pos.directional_offset(d)) {
@@ -181,7 +188,13 @@ impl ShipAiState for Collect {
             }
         }
 
-        if let Some(gain) = prey[0] {
+        for (c, &pr) in costs.iter_mut().zip(&prey) {
+            if let Some(gain) = pr {
+                *c = -gain;
+            }
+        }
+
+        /*if let Some(gain) = prey[0] {
             cw = -gain;
         }
 
@@ -195,14 +208,14 @@ impl ShipAiState for Collect {
 
         if let Some(gain) = prey[3] {
             cs = -gain;
-        }
+        }*/
 
         if prey.into_iter().any(|pr| pr.is_some()) {
             // attract nearby ships a bit more
             world.add_pheromone(pos, 1000.0);
         }
 
-        world.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
+        world.gns.plan_move(id, pos, costs[4], costs[2], costs[3], costs[1], costs[0]);
 
         StackOp::None
     }

@@ -35,7 +35,9 @@
     "greedy_move_cost_factor": 3.0,
     "seek_greed_factor": 1.0,
     "seek_return_cost_factor": 0.0,
-    "seek_pheromone_factor": 0.005
+    "seek_pheromone_factor": 0.005,
+
+    "carefulness_limit": 500
   },
 
   "statistics": {
