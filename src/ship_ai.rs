@@ -238,16 +238,16 @@ impl ShipAiState for Deliver {
 
             let ok_n = !world
                 .mp
-                .is_occupied(pos.directional_offset(Direction::North));
+                .is_reachable(pos.directional_offset(Direction::North));
             let ok_s = !world
                 .mp
-                .is_occupied(pos.directional_offset(Direction::South));
+                .is_reachable(pos.directional_offset(Direction::South));
             let ok_e = !world
                 .mp
-                .is_occupied(pos.directional_offset(Direction::East));
+                .is_reachable(pos.directional_offset(Direction::East));
             let ok_w = !world
                 .mp
-                .is_occupied(pos.directional_offset(Direction::West));
+                .is_reachable(pos.directional_offset(Direction::West));
 
             let cn = if ok_n { cn - c0 } else { i32::max_value() };
             let cs = if ok_s { cs - c0 } else { i32::max_value() };

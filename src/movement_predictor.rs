@@ -1,3 +1,4 @@
+use hlt::direction::Direction;
 use hlt::game::Game;
 use hlt::map_cell::Structure;
 use hlt::position::Position;
@@ -61,7 +62,11 @@ impl MovementPredictor {
 
     pub fn is_occupied(&self, pos: Position) -> bool {
         let pos = self.normalize(pos);
-        return self.probs[pos.y as usize][pos.x as usize] > 0.99;
+        self.probs[pos.y as usize][pos.x as usize] > 0.99
+    }
+
+    pub fn is_reachable(&self, pos: Position) -> bool {
+        Direction::get_all_options().into_iter().map(|d| pos.directional_offset(d)).any(|p| self.is_occupied(p))
     }
 
     pub fn normalize(&self, position: Position) -> Position {
