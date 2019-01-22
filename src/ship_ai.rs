@@ -50,15 +50,18 @@ pub struct Collect;
 
 impl ShipAiState for Collect {
     fn step(&mut self, id: ShipId, world: &mut GameState) -> StackOp<Box<dyn ShipAiState>> {
-        if world.get_ship(id).is_full() {
+        let pos = world.get_ship(id).position;
+        let cargo = world.get_ship(id).halite as i32;
+        let phi0 = world.get_pheromone(pos);
+        Log::log(&format!("{:?} observes a pheromone level of {} at {:?}", id, phi0, pos));
+
+        if cargo >= 950 || phi0 < 10.0 && cargo >= 500 {
             return StackOp::Done
         }
 
         if stuck_move(id, world) {
             return StackOp::None
         }
-
-        let pos = world.get_ship(id).position;
 
         let dist = world.get_return_distance(world.get_ship(id).position);
         if world.rounds_left()
@@ -69,12 +72,9 @@ impl ShipAiState for Collect {
             return StackOp::Override(Box::new(GoHome))
         }
 
-        let cargo = world.get_ship(id).halite as i32;
-
         let mc = world.movement_cost(&pos);
 
         let current_halite = world.halite_gain(&pos) * world.game.constants.extract_ratio; // factor inspiration into current_halite
-        let phi0 = world.get_pheromone(pos);
 
         let mut weights: Vec<_> = if cargo < mc {
             vec![9999999.0, 0.0, 0.0, 0.0, 0.0]
