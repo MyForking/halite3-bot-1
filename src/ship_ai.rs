@@ -111,7 +111,7 @@ impl ShipAiState for Collect {
             .map(|d| pos.directional_offset(d))
             .map(|p| if cargo <= world.config.ships.carefulness_limit {world.mp.is_occupied(p)} else {world.mp.is_reachable(p)})
             .zip(weights)
-            .map(|(avoid, w)| if avoid {i32::max_value()} else {-(w * 100.0) as i32})
+            .map(|(avoid, w)| if avoid {i32::max_value() - 10} else {-(w * 100.0) as i32})
             .collect();
 
         let mut prey = vec![];
