@@ -138,7 +138,7 @@ impl ShipAiState for Collect {
                 let free_cargo = world.my_ships()
                     .map(|id| world.get_ship(id))
                     .filter(|ship| ship.position != pos)
-                    .filter(|ship| world.game.map.calculate_distance(&p, &ship.position) < r)
+                    .filter(|ship| world.game.map.calculate_distance(&p, &ship.position) <= r)
                     .inspect(|ship| Log::log(&format!("   ... and friendly ship at {:?}", ship.position)))
                     .map(|ship| ship.capacity() as i32)
                     .sum::<i32>();
