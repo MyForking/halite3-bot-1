@@ -67,7 +67,11 @@ impl MovementPredictor {
                 },
             );*/
 
-            for p in pos.get_surrounding_cardinals().into_iter().chain(std::iter::once(pos)) {
+            for p in pos.get_surrounding_cardinals().into_iter()
+                .chain(std::iter::once(pos))
+                .map(|p| self.normalize(p))
+                .collect::<Vec<_>>()
+                {
                 match game.map.at_position(&pos).structure
                 {
                     // simply ignore enemy ships at my own structures
