@@ -17,9 +17,9 @@ def run_game(bots, s):
 if __name__ == '__main__':
 
     bots = ['./target/release/my_bot',
-            #'./old_bots/v20 -c old_bots/v20.cfg.json',
-            #'./old_bots/v20 -c old_bots/v20.cfg.json',
-            './old_bots/v20 -c old_bots/v20.cfg.json']
+            #'./old_bots/v21 -c old_bots/v21.cfg.json',
+            #'./old_bots/v21 -c old_bots/v21.cfg.json',
+            './old_bots/v21 -c old_bots/v21.cfg.json']
 
     size = '32'
 
@@ -34,11 +34,11 @@ if __name__ == '__main__':
 
         s = run_game([bots[i] for i in order], size)
         n_wins += np.argmax(s) == order.index(0)
-        scores_list.append((s[reverse_order[0]], np.mean([s[r] for r in reverse_order])))
+        scores_list.append((s[reverse_order[0]], np.mean([s[r] for r in reverse_order[1:]])))
 
         if (k + 1) % 10 == 0:
             scores = np.array(scores_list) * 1.0
-            print(bots[0], 'vs', bots[0])
+            print(bots[0], 'vs', bots[1:])
             print(np.mean(scores, axis=0))
             print(np.std(scores, axis=0))
 
