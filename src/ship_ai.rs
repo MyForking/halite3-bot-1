@@ -119,27 +119,88 @@ impl ShipAiState for Collect {
             .mp
             .is_occupied(pos.directional_offset(Direction::West));
 
-        let cn = if ok_n {
+        let mut cn = if ok_n {
             -(weights[2] * 100.0) as i32
         } else {
             i32::max_value()
         };
-        let cs = if ok_s {
+        let mut cs = if ok_s {
             -(weights[3] * 100.0) as i32
         } else {
             i32::max_value()
         };
-        let ce = if ok_e {
+        let mut ce = if ok_e {
             -(weights[1] * 100.0) as i32
         } else {
             i32::max_value()
         };
-        let cw = if ok_w {
+        let mut cw = if ok_w {
             -(weights[0] * 100.0) as i32
         } else {
             i32::max_value()
         };
         let c0 = -(weights[4] * 100.0) as i32;
+
+        let mut prey = vec![];
+        for p in Direction::get_all_cardinals().into_iter().map(|d| pos.directional_offset(d)) {
+            prey.push(None);
+            if let Some(ship) = world.get_ship_at(p) {
+                if ship.owner == world.game.my_id {
+                    continue
+                }
+
+                let other_cargo = ship.halite;
+                if other_cargo <= cargo {
+                    continue
+                }
+
+                let r = world
+                    .find_nearest_oponent(p, true)
+                    .map(|id| world.get_ship(id).position)
+                    .map(|sp| world.game.map.calculate_distance(&p, &sp))
+                    .unwrap_or(10);
+
+                Log::log(&format!("potential prey at {:?} with nearest opponent {} steps away...", p, r));
+
+                let free_cargo = world.my_ships()
+                    .map(|id| world.get_ship(id))
+                    .filter(|ship| ship.position != pos)
+                    .filter(|ship| world.game.map.calculate_distance(&p, &ship.position) < r)
+                    .inspect(|ship| Log::log(&format!("   ... and friendly ship at {:?}", ship.position)))
+                    .map(|ship| ship.capacity())
+                    .sum::<usize>();
+
+                if free_cargo > cargo {
+                    let aggressiveness = if world.game.players.len() == 2 {
+                        1000
+                    } else {
+                        10
+                    };
+                    *prey.last_mut().unwrap() = Some(aggressiveness * (other_cargo - cargo) as i32);
+                }
+            }
+        }
+
+        if let Some(gain) = prey[0] {
+            cw = -gain;
+        }
+
+        if let Some(gain) = prey[1] {
+            ce = -gain;
+        }
+
+        if let Some(gain) = prey[2] {
+            cn = -gain;
+        }
+
+        if let Some(gain) = prey[3] {
+            cs = -gain;
+        }
+
+        if prey.into_iter().any(|pr| pr.is_some()) {
+            // attract nearby ships a bit more
+            world.add_pheromone(pos, 1000.0);
+        }
 
         world.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 

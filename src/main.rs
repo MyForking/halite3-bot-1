@@ -226,6 +226,21 @@ impl GameState {
         self.game.ships.get_mut(&id).unwrap()
     }
 
+    fn get_ship_at(&self, pos: Position) -> Option<&Ship> {
+        self.game.ships.values().find(|ship| ship.position == pos)
+    }
+
+    fn find_nearest_oponent(&self, pos: Position, exclude_pos: bool) -> Option<ShipId> {
+        let mut ships: Vec<_> = self.game.ships.values().filter(|ship| ship.owner != self.game.my_id).collect();
+        ships.sort_unstable_by_key(|ship| self.game.map.calculate_distance(&pos, &ship.position));
+
+        if exclude_pos {
+            ships.iter().find(|ship| ship.position != pos)
+        } else {
+            ships.first()
+        }.map(|ship| ship.id)
+    }
+
     fn distance_to_nearest_dropoff(&self, id: ShipId) -> usize {
         let pos = self.get_ship(id).position;
         let dist = self

@@ -4,7 +4,6 @@ use pathfinding::kuhn_munkres::{kuhn_munkres, Weights};
 
 use hlt::command::Command;
 use hlt::direction::Direction;
-use hlt::log::Log;
 use hlt::position::Position;
 use hlt::ShipId;
 
@@ -55,7 +54,7 @@ impl NavigationSystem {
     }
 
     pub fn notify_spawn(&mut self, pos: Position) {
-        Log::log(&format!("planned spawn @ {:?}", pos));
+        //Log::log(&format!("planned spawn @ {:?}", pos));
         let p0 = self.pos(pos);
         self.ships.insert(
             Actor::Shipyard,

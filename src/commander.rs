@@ -13,7 +13,7 @@ pub struct Commander {
 impl Commander {
     pub fn new() -> Self {
         Commander {
-            states: StateStack::new(Box::new(DefaultState)),
+            states: StateStack::new(Box::new(MidGame)),
         }
     }
 
@@ -39,9 +39,9 @@ pub trait CommanderState {
     fn request_task(&self, id: ShipId, world: &GameState) -> Box<dyn ShipAiState>;
 }
 
-struct DefaultState;
+struct MidGame;
 
-impl CommanderState for DefaultState {
+impl CommanderState for MidGame {
     fn step(&self, aimgr: &AiManager, world: &mut GameState) -> StackOp<Box<dyn CommanderState>> {
         let (max_pos, max_density) = world
             .halite_density
@@ -126,12 +126,12 @@ impl CommanderState for DefaultState {
 
             (halite_left / n_ships > world.game.constants.ship_cost)
                 && world.rounds_left()
-                    > world.game.map.width * world.config.strategy.spawn_min_rounds_left_factor
+                > world.game.map.width * world.config.strategy.spawn_min_rounds_left_factor
         };
 
         want_ship &= !want_dropoff
             || world.me().halite
-                >= world.game.constants.dropoff_cost + world.game.constants.ship_cost;
+            >= world.game.constants.dropoff_cost + world.game.constants.ship_cost;
 
         if want_ship && world.me().halite >= world.game.constants.ship_cost {
             let pos = world.me().shipyard.position;
