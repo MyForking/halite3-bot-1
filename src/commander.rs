@@ -61,7 +61,7 @@ impl CommanderState for MidGame {
             .unwrap();
 
         let want_dropoff = world.avg_return_length
-            >= world.config.expansion.expansion_distance as f64
+            >= world.config.expansion.return_distance as f64
             && max_density >= world.config.expansion.min_halite_density;
 
         if want_dropoff {
