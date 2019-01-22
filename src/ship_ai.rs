@@ -114,40 +114,6 @@ impl ShipAiState for Collect {
             .map(|(avoid, w)| if avoid {i32::max_value()} else {-(w * 100.0) as i32})
             .collect();
 
-        /*let ok_n = !world
-            .mp
-            .is_occupied(pos.directional_offset(Direction::North));
-        let ok_s = !world
-            .mp
-            .is_occupied(pos.directional_offset(Direction::South));
-        let ok_e = !world
-            .mp
-            .is_occupied(pos.directional_offset(Direction::East));
-        let ok_w = !world
-            .mp
-            .is_occupied(pos.directional_offset(Direction::West));
-
-        let mut cn = if ok_n {
-            -(weights[2] * 100.0) as i32
-        } else {
-            i32::max_value()
-        };
-        let mut cs = if ok_s {
-            -(weights[3] * 100.0) as i32
-        } else {
-            i32::max_value()
-        };
-        let mut ce = if ok_e {
-            -(weights[1] * 100.0) as i32
-        } else {
-            i32::max_value()
-        };
-        let mut cw = if ok_w {
-            -(weights[0] * 100.0) as i32
-        } else {
-            i32::max_value()
-        };*/
-
         let mut prey = vec![];
         for p in Direction::get_all_cardinals().into_iter().map(|d| pos.directional_offset(d)) {
             prey.push(None);
@@ -193,22 +159,6 @@ impl ShipAiState for Collect {
                 *c = -gain;
             }
         }
-
-        /*if let Some(gain) = prey[0] {
-            cw = -gain;
-        }
-
-        if let Some(gain) = prey[1] {
-            ce = -gain;
-        }
-
-        if let Some(gain) = prey[2] {
-            cn = -gain;
-        }
-
-        if let Some(gain) = prey[3] {
-            cs = -gain;
-        }*/
 
         if prey.into_iter().any(|pr| pr.is_some()) {
             // attract nearby ships a bit more
@@ -265,11 +215,11 @@ impl ShipAiState for Deliver {
                 .mp
                 .is_reachable(pos.directional_offset(Direction::West));
 
-            let cn = if ok_n { cn - c0 } else { i32::max_value() };
-            let cs = if ok_s { cs - c0 } else { i32::max_value() };
-            let ce = if ok_e { ce - c0 } else { i32::max_value() };
-            let cw = if ok_w { cw - c0 } else { i32::max_value() };
-            let c0 = if ok_0 { harvest } else { i32::max_value() };
+            let cn = if ok_n { cn - c0 } else { i32::max_value() - 10 };
+            let cs = if ok_s { cs - c0 } else { i32::max_value() - 10 };
+            let ce = if ok_e { ce - c0 } else { i32::max_value() - 10 };
+            let cw = if ok_w { cw - c0 } else { i32::max_value() - 10 };
+            let c0 = if ok_0 { harvest } else { i32::max_value() - 10 };
             world.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
         }
 
@@ -327,10 +277,10 @@ impl ShipAiState for GoHome {
             .mp
             .is_occupied(pos.directional_offset(Direction::West));
 
-        let cn = if ok_n { cn - c0 } else { i32::max_value() };
-        let cs = if ok_s { cs - c0 } else { i32::max_value() };
-        let ce = if ok_e { ce - c0 } else { i32::max_value() };
-        let cw = if ok_w { cw - c0 } else { i32::max_value() };
+        let cn = if ok_n { cn - c0 } else { i32::max_value() - 10 };
+        let cs = if ok_s { cs - c0 } else { i32::max_value() - 10 };
+        let ce = if ok_e { ce - c0 } else { i32::max_value() - 10 };
+        let cw = if ok_w { cw - c0 } else { i32::max_value() - 10 };
         let c0 = world.config.navigation.return_step_cost;
         world.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 
