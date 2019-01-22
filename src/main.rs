@@ -479,8 +479,6 @@ impl GameState {
         let w = self.game.map.width;
         let h = self.game.map.height;
 
-        let ids: Vec<_> = self.my_ships().collect();
-
         for _ in 0..self.config.pheromones.n_steps {
             for i in 0..h {
                 for j in 0..w {
@@ -501,14 +499,18 @@ impl GameState {
                 }
             }
 
-            for id in &ids {
-                let (p, cap) = {
-                    let ship = self.get_ship(*id);
-                    (ship.position, ship.capacity() as f64)
+            for ship in self.game.ships.values() {
+                let (p, cargo, cap) = {
+                    (ship.position, ship.halite as f64, ship.capacity() as f64)
                 };
+
                 let phi0 = self.pheromones[p.y as usize][p.x as usize];
 
-                let dphi = (phi0 - cap).min(0.0) * self.config.pheromones.ship_absorbtion;
+                let dphi = if ship.owner == self.game.my_id {
+                    (phi0 - cap).min(0.0) * self.config.pheromones.ship_absorbtion
+                } else {
+                    (cargo - phi0).max(0.0) * 0.1
+                };
 
                 self.pheromones_backbuffer[p.y as usize][p.x as usize] +=
                     dphi * self.config.pheromones.time_step;
