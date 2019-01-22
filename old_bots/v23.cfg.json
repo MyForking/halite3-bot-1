@@ -1,0 +1,47 @@
+{
+  "strategy": {
+    "spawn_halite_floor": 0,
+    "spawn_min_rounds_left_factor": 2
+  },
+
+  "expansion": {
+    "expansion_distance": 15,
+    "return_distance": 10,
+    "min_halite_density": 100,
+    "ship_radius": 12,
+    "n_ships": 3
+  },
+
+  "navigation": {
+    "return_step_cost": 100,
+    "go_home_safety_factor": 1
+  },
+
+  "pheromones": {
+    "evaporation_rate": 1.0,
+    "diffusion_coefficient": 10,
+    "decay_rate": 0.25,
+    "ship_absorbtion": 0.15,
+    "ship_evaporation": 0.0,
+    "time_step": 0.02,
+    "n_steps": 50
+  },
+
+  "ships": {
+    "greedy_prefer_stay_factor": 2,
+    "greedy_harvest_limit": 50,
+    "greedy_seek_limit": 50,
+    "greedy_pheromone_weight": 2.0,
+
+    "greedy_move_cost_factor": 3.0,
+    "seek_greed_factor": 1.0,
+    "seek_return_cost_factor": 0.0,
+    "seek_pheromone_factor": 0.005,
+
+    "carefulness_limit": 500
+  },
+
+  "statistics": {
+    "halite_collection_window": 100
+  }
+}
