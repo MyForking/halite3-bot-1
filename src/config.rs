@@ -28,7 +28,7 @@ pub struct Expansion {
 
 #[derive(Deserialize)]
 pub struct Navigation {
-    pub return_step_cost: usize,
+    pub return_step_cost: i32,
     pub go_home_safety_factor: usize,
 }
 

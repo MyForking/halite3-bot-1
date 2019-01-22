@@ -69,7 +69,7 @@ impl ShipAiState for Collect {
             return StackOp::Override(Box::new(GoHome))
         }
 
-        let cargo = world.get_ship(id).halite;
+        let cargo = world.get_ship(id).halite as i32;
 
         let mc = world.movement_cost(&pos);
 
@@ -149,7 +149,7 @@ impl ShipAiState for Collect {
                     continue
                 }
 
-                let other_cargo = ship.halite;
+                let other_cargo = ship.halite as i32;
                 if other_cargo <= cargo {
                     continue
                 }
@@ -167,8 +167,8 @@ impl ShipAiState for Collect {
                     .filter(|ship| ship.position != pos)
                     .filter(|ship| world.game.map.calculate_distance(&p, &ship.position) < r)
                     .inspect(|ship| Log::log(&format!("   ... and friendly ship at {:?}", ship.position)))
-                    .map(|ship| ship.capacity())
-                    .sum::<usize>();
+                    .map(|ship| ship.capacity() as i32)
+                    .sum::<i32>();
 
                 if free_cargo > cargo {
                     let aggressiveness = if world.game.players.len() == 2 {
@@ -230,7 +230,7 @@ impl ShipAiState for Deliver {
         let cap = world.get_ship(id).capacity();
         let cargo = world.get_ship(id).halite;
 
-        let harvest = world.config.navigation.return_step_cost as i32
+        let harvest = world.config.navigation.return_step_cost
             - world.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
 
         if !stuck_move(id, world) {
@@ -314,7 +314,7 @@ impl ShipAiState for GoHome {
         let cs = if ok_s { cs - c0 } else { i32::max_value() };
         let ce = if ok_e { ce - c0 } else { i32::max_value() };
         let cw = if ok_w { cw - c0 } else { i32::max_value() };
-        let c0 = world.config.navigation.return_step_cost as i32;
+        let c0 = world.config.navigation.return_step_cost;
         world.gns.plan_move(id, pos, c0, cn, cs, ce, cw);
 
         StackOp::None
@@ -340,11 +340,11 @@ impl ShipAiState for BuildDropoff {
 
 fn stuck_move(id: ShipId, state: &mut GameState) -> bool {
     let pos = state.get_ship(id).position;
-    let cargo = state.get_ship(id).halite;
+    let cargo = state.get_ship(id).halite as i32;
     let cap = state.get_ship(id).capacity();
 
     let harvest =
-        state.config.navigation.return_step_cost as i32 - state.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
+        state.config.navigation.return_step_cost - state.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
 
     if state.movement_cost(&pos) > cargo {
         state.gns.plan_move(

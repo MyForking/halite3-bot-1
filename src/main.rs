@@ -24,6 +24,7 @@ use std::env;
 use std::io::prelude::*;
 //use std::time::SystemTime;
 //use std::time::UNIX_EPOCH;
+use utils::NumericCast;
 
 mod ai_manager;
 mod commander;
@@ -33,6 +34,7 @@ mod movement_predictor;
 mod navigation_system;
 mod pda;
 mod ship_ai;
+mod utils;
 
 #[derive(Debug, Eq, PartialEq)]
 struct DijkstraMinNode<C: Ord, T: Eq> {
@@ -89,7 +91,7 @@ pub struct GameState {
 
     halite_density: Vec<Vec<i32>>,
     return_map_directions: Vec<Vec<Direction>>,
-    return_cumultive_costs: Vec<Vec<usize>>,
+    return_cumultive_costs: Vec<Vec<i32>>,
 
     halite_percentiles: Vec<usize>,
     avg_return_length: f64,
@@ -280,8 +282,8 @@ impl GameState {
         true
     }
 
-    fn movement_cost(&self, pos: &Position) -> usize {
-        self.game.map.at_position(&pos).halite / self.game.constants.move_cost_ratio
+    fn movement_cost(&self, pos: &Position) -> i32 {
+        (self.game.map.at_position(&pos).halite / self.game.constants.move_cost_ratio).saturate()
     }
 
     fn halite_gain(&self, pos: &Position) -> usize {
@@ -323,11 +325,11 @@ impl GameState {
             .map
             .normalize(&pos.directional_offset(Direction::West));
         [
-            self.return_cumultive_costs[p0.y as usize][p0.x as usize] as i32,
-            self.return_cumultive_costs[pn.y as usize][pn.x as usize] as i32,
-            self.return_cumultive_costs[ps.y as usize][ps.x as usize] as i32,
-            self.return_cumultive_costs[pe.y as usize][pe.x as usize] as i32,
-            self.return_cumultive_costs[pw.y as usize][pw.x as usize] as i32,
+            self.return_cumultive_costs[p0.y as usize][p0.x as usize],
+            self.return_cumultive_costs[pn.y as usize][pn.x as usize],
+            self.return_cumultive_costs[ps.y as usize][ps.x as usize],
+            self.return_cumultive_costs[pe.y as usize][pe.x as usize],
+            self.return_cumultive_costs[pw.y as usize][pw.x as usize],
         ]
     }
 
@@ -400,7 +402,7 @@ impl GameState {
             .iter_mut()
             .flat_map(|row| row.iter_mut())
         {
-            *cc = usize::max_value();
+            *cc = i32::max_value();
         }
 
         let mut queue = BinaryHeap::new();
@@ -440,7 +442,7 @@ impl GameState {
                     }
                 }
                 let c =
-                    node.cost + self.movement_cost(&p) + self.config.navigation.return_step_cost;
+                    node.cost.saturating_add(self.movement_cost(&p)).saturating_add(self.config.navigation.return_step_cost);
                 queue.push(DijkstraMinNode::new(c, (p, d)));
             }
         }
