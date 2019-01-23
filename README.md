@@ -1,29 +1,28 @@
-# Starter Kit
+# Halite III Bot
 
-## Halite III starter kit components
-* MyBot.{extension}, a starter bot outline
-* /hlt directory, which contains modifiable helper functions for your bot
-* A Halite executable that enables local playtesting of your bot
-* The scripts run_game.bat (Windows) and run_game.sh (MacOS, Linux)
+This repository tracks the code I wrote for the [Halite Challenge](https://halite.io/).
 
-## Testing your bot locally
-* Run run_game.bat (Windows) and run_game.sh (MacOS, Linux) to run a game of Halite III. By default, these scripts run a game of your MyBot.py bot vs. itself.  You can modify the board size, map seed, and the opponents of test games using the CLI.
+> Halite is an open source artificial intelligence challenge, created by Two Sigma.
+>
+>Halite III is a resource management game. Your goal is to build a bot that efficiently navigates the seas collecting halite, a luminous energy resource.
 
-## CLI
-The Halite executable comes with a command line interface (CLI). Run `$ ./halite --help` to see a full listing of available flags.
+The code is an ugly unstructured mess that grew over time. It is peppered with magic numbers and sprinkled with inconsistencies. I always wanted to clean it up but then rather spent the time optimizing the bot by making the code even uglier.
 
-## Submitting your bot
-* Zip your MyBot.{extension} file and /hlt directory together.
-* Submit your zipped file here: https://halite.io/play-programming-challenge
 
-## Compiling your bot on our game servers
-* Your bot has `10 minutes` to install dependencies and compile on the game server.
-* You can run custom commands to set up your bot by including an `install.sh` file alongside `MyBot.{ext}`. This file will be executed and should be a Bash shell script. You must include the shebang line at the top: `#!/bin/bash`.
-  * For Python, you may install packages using pip, but you may not install to the global package directory. Instead, install packages as follows: `python3.6 -m pip install --system --target . numpy`
-* Some languages don't use the `MyBot.{ext}` convention. Exceptions include:
-  * Rust: a Cargo.toml in the root will be detected as Rust. Your bot will compile with `cargo rustc`.
-  * Swift: a Package.swift in the root will be detected as Swift. Your bot will compile with `swift build`.
-  * Haskell: You may upload a MyBot.hs, or you may upload a `stack.yaml`, in which case your bot will compile with `stack build`.
-  * Elixir: Upload a mix.exs. Your bot will compile with `mix deps.get` followed by `mix escript.build`.
-  * Clojure: Upload a project.clj. Your bot will compile with `lein uberjar`.
-  * .NET: Upload a MyBot.csproj or MyBot.fsproj. Your bot will compile with `dotnet restore` followed with `dotnet build`.
+## Why Rust?
+
+The primary reason I wrote this bot in Rust is that I wanted to. I use Rust for all my recent hobby projects for that reason. Python and numpy might have made rapid development of new features easier, but I think Rust was still a good choice for this project:
+1. There was no time pressure. I joined in late, but still had a month of development left. If the borrow checker fought me I could simply stay up an hour longer on that evening until it calmed down again.
+2. If my code compiled and worked at home I was confident it would compile and work correctly on the servers too. In Python there is always that typo waiting in that function that was never entered during local testing, and in C++ I always get sloppy with RAII and pointers, saying *hello* to mr. segfault.
+
+## Initial plans and what I actually ended up with
+
+to do
+
+## Table of Features and Ranks
+
+to do
+
+## In-depth Description
+
+todo
