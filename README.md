@@ -83,6 +83,10 @@ The movement predictor actually does not predict very much. I had bigger plans b
 
 It simply classifies all map positions as `Clear`, `Occupied` by an opponenent, and `Reachable` by an opponent. This information is used by the ship AI to weigh their moves based on their safety needs.
 
+#### Misc
+
+- I found the easiest solution to opponents trying to block shipyard/dropoff was to ignore them. Just pretend they are not there and the first ship returning with halite will remove them without interrupting your game plan and special case handling. Also, this method will not be triggered by oponents accidentially passing over your structures.
+
 
 ### Known Bugs in the Final Version
 
