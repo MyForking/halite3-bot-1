@@ -27,12 +27,12 @@ to do
 
 ## Table of Features and Ranks
 
-The table below shows the ranks (second row) achieved by each bot version (first row). Additionally, a :x: indicates if a feature was implemented in that version.
+The table below shows the ranks (second row) achieved by each bot version (first row). Additionally, `###` indicates that a feature was implemented in a specific version.
 
 ```
-|Feature                     | <=4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 |
+| Feature        bot version | <=4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 |
 |----------------------------|-----|---|---|---|---|---|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
-|                            |~1000|1236|666|644|328|361|253| 231| 224| 192| 199| 190| 120| 141| 109| 114| 84 | 82 | 71 |  86|  52|  ? |
+|                       rank |~1000|1236|666|644|328|361|253| 231| 224| 192| 199| 190| 120| 141| 109| 114| 84 | 82 | 71 |  86|  52|  ? |
 | AI State Machine           | ####|###|###|###|###|   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |
 | AI Behavior Trees          |     |   |   |   |   |###|####|####|####|####|####|####|####|####|####|####|####|    |    |    |    |    |
 | Ai Pushdown Automaton      |     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |####|####|####|####|####|
