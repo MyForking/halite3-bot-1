@@ -29,36 +29,40 @@ to do
 
 The table below shows the ranks (second row) achieved by each bot version (first row). Additionally, a :x: indicates if a feature was implemented in that version.
 
+```
 |Feature                     | <=4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23 | 24 | 25 |
 |----------------------------|-----|---|---|---|---|---|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
 |                            |~1000|1236|666|644|328|361|253| 231| 224| 192| 199| 190| 120| 141| 109| 114| 84 | 82 | 71 |  86|  52|  ? |
-| AI State Machine           | :x: |:x:|:x:|:x:|:x:|
-| AI Behavior Trees          |     |   |   |   |   |:x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Ai Pushdown Automaton      |     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    | :x:| :x:| :x:| :x:| :x:|
-| Pheromone Engine           |     |   |   |   |   |   |    |    |    | :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| [Kuhn-Munkres](https://en.wikipedia.org/wiki/Hungarian_algorithm) movement solver |     |   |   |   |   |   |    |    |    |    | :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Build Dropoffs             |     |   |   |   |   |   |    | :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Greedy Gathering           | :x: |:x:|:x:|:x:|:x:|:x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Use Inspiration            |     |   |   |   |   |   |    |    |    |    |    | :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Search Gathering locations |     |   |   |   |:x:|:x:| :x:| :x:| :x:| :x:|
-| Low-Halite Gathering       |     |   |   |   |   |   | :x:| :x:| :x:|
-| Some Ships seek halite maxima |:x:|:x:|
-| Deliver Halite: naive nav. | :x: |
-| Deliver Halite: Dijkstra   |     |:x:|:x:|:x:|:x:|:x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Dijkstra: path length penalty|   |   |   |   |   |   |    |    |    |    |    |    | :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| End of Game Returning Home |     |   |   |   |   |   | :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Spawn based on performance | :x: |:x:|:x:|:x:|:x:|:x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Spawn based on halite left |     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    | :x:| :x:| :x:| :x:| :x:| :x:|
-| Spawn if enemy on shipyard | :x: |:x:|:x:|:x:|:x:|:x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Kamikaze if opponent on s.y.|    |   |   |:x:|:x:|:x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Simply ignore opponents on my structures|||| |   |   |    |    |    |    |    |    |    | :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Force move ships from structures | | |   |   |:x:|:x:| :x:|
-| Multiple ships from structures   | | |   |   |   |   | :x:| :x:| :x:| :x:|
-| Enough halite to move?     |     |   |   |   |   |   | :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Ignore opponent ships      |     |   |   |   |   |   |    |    |    | :x:| :x:| :x:| :x:|
-| Avoid all opponent contact |     |   |   |   |   |   |    |    |    |    |    |    |    | :x:|
-| Avoid opponent ship positions|:x:|:x:|:x:|:x:|:x:|:x:| :x:| :x:| :x:|    |    |    |    | :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:| :x:|
-| Sink adjacent high-cargo opponents|| |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    | :x:| :x:| :x:| :x:| :x:|
-| High-cargo ships avoid opponents||   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    | :x:| :x:| :x:| :x:|
-| Opponents emit pheromones  |    |    |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |    |    | :x:| :x:|
-| Ships return earlier in late game||  |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |    |    | :x:| :x:|
+| AI State Machine           | ####|###|###|###|###|   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |
+| AI Behavior Trees          |     |   |   |   |   |###|####|####|####|####|####|####|####|####|####|####|####|    |    |    |    |    |
+| Ai Pushdown Automaton      |     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |####|####|####|####|####|
+| Pheromone Engine           |     |   |   |   |   |   |    |    |    |####|####|####|####|####|####|####|####|####|####|####|####|####|
+| Movement Solver (*)        |     |   |   |   |   |   |    |    |    |    |####|####|####|####|####|####|####|####|####|####|####|####|
+| Build Dropoffs             |     |   |   |   |   |   |    |####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|
+| Greedy Gathering           | ####|###|###|###|###|###|####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|
+| Use Inspiration            |     |   |   |   |   |   |    |    |    |    |    |####|####|####|####|####|####|####|####|####|####|####|
+| Search Gathering locations |     |   |   |   |###|###|####|####|####|####|    |    |    |    |    |    |    |    |    |    |    |    |
+| Low-Halite Gathering       |     |   |   |   |   |   |####|####|####|    |    |    |    |    |    |    |    |    |    |    |    |    |
+| Ships seek halite maxima   | ####|###|   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |
+| Deliver Halite: naive nav. | ####|   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |
+| Deliver Halite: Dijkstra   |     |###|###|###|###|###|####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|
+| Dijkstra: length penalty   |     |   |   |   |   |   |    |    |    |    |    |    |####|####|####|####|####|####|####|####|####|####|
+| End of Game Returning Home |     |   |   |   |   |   |####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|
+| Spawn based on performance | ####|###|###|###|###|###|####|####|####|####|####|####|####|####|####|####|    |    |    |    |    |    |
+| Spawn based on halite left |     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |####|####|####|####|####|####|
+| Spawn if enemy on shipyard | ####|###|###|###|###|###|####|####|####|####|####|####|####|    |    |    |    |    |    |    |    |    |
+| Kamikaze opponents on s.y. |     |   |   |###|###|###|####|####|####|####|####|####|####|    |    |    |    |    |    |    |    |    |
+| Ignore opponents on s.y.   |     |   |   |   |   |   |    |    |    |    |    |    |    |####|####|####|####|####|####|####|####|####|
+| Force move ships from s.y. |     |   |   |   |###|###|####|    |    |    |    |    |    |    |    |    |    |    |    |    |    |    |
+| Multiple ships from s.y.   |     |   |   |   |   |   |####|####|####|####|    |    |    |    |    |    |    |    |    |    |    |    |
+| Enough halite to move?     |     |   |   |   |   |   |####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|
+| Ignore opponent ships      |     |   |   |   |   |   |    |    |    |####|####|####|####|    |    |    |    |    |    |    |    |    |
+| Avoid all opponent contact |     |   |   |   |   |   |    |    |    |    |    |    |    |####|    |    |    |    |    |    |    |    |
+| Avoid opponent ship pos.   | ####|###|###|###|###|###|####|####|####|    |    |    |    |####|####|####|####|####|####|####|####|####|
+| Collide high-cargo opponents|    |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |####|####|####|####|####|
+| High-cargo ships flee battles|   |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |####|####|####|####|
+| Opponents emit pheromones  |     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |####|####|
+| Leturn earlier in late game|     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |####|####|
+```
+
+(*) [Kuhn Munkres Algorithm](https://en.wikipedia.org/wiki/Hungarian_algorithm)
