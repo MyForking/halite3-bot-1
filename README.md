@@ -26,7 +26,7 @@ In hindsight, I suspect the reason for my machine learning failure was that I we
 
 ### Details of the Final Version
 
-The goal of Halite III was to command a swarm of ships to collect more resources than the opponent(s). These are the main components of the AI bot:
+These are the main components of the AI bot:
 
 - A [pheromone simulation](https://en.wikipedia.org/wiki/Fick%27s_laws_of_diffusion#Fick's_second_law_2)
 - A [pushdown automaton](https://en.wikipedia.org/wiki/Pushdown_automaton) controls each individual ship
