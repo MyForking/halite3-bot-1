@@ -26,3 +26,7 @@ to do
 ## In-depth Description
 
 todo
+
+## Known Bugs in the Final Version
+
+- Ships refuse to return to enter the dropoff/shipyard for unloading if an opponent ship is adjacent to the structure. ([`movement_predictor.rs:75`](https://github.com/mbillingr/halite3-bot/blob/master/src/movement_predictor.rs#L75) wrongly uses the ship position instead of the adjacent tile position.)
