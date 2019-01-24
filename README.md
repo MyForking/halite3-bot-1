@@ -12,7 +12,7 @@ The code is an ugly unstructured mess that grew over time. It is peppered with m
 ## Why Rust?
 
 The primary reason I wrote this bot in Rust is that I wanted to. I use Rust for all my recent hobby projects for that reason. Python and numpy might have made rapid development of new features easier, but I think Rust was still a good choice for this project:
-1. There was no time pressure. I joined in late, but still had a month of development left. If the [borrow checker fought me] https://m-decoster.github.io/2017/01/16/fighting-borrowchk/) I could simply stay up an hour longer on that evening until it calmed down again.
+1. There was no time pressure. I joined in late, but still had a month of development left. If the [borrow checker fought me](https://m-decoster.github.io/2017/01/16/fighting-borrowchk/) I could simply stay up an hour longer on that evening until it calmed down again.
 2. If my code compiled and worked at home I was confident it would compile and work correctly on the servers too. In Python there is always that typo waiting in that function that was never entered during local testing, and in C++ I always get sloppy with RAII and pointers, saying *hello* to mr. segfault.
 
 ## Initial plans and what I actually ended up with
