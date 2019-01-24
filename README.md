@@ -64,6 +64,7 @@ If these conditions are met, the commander looks for a ship that satisfies the f
 - manhatten distance to nearest own structure >= 15
 - at least 3 friendly ships within a radius of 12
 - halite density at ship's location >= 100
+
 If multiple ships satisfy these criteria, the ship seeing the highest pheromone concentration at its current location is instructed to build a dropoff.
 
 #### Ship AI
