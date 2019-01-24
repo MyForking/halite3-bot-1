@@ -101,7 +101,7 @@ The table below shows the ranks (second row) achieved by each bot version (first
 | AI Behavior Trees          |     |   |   |   |   |###|####|####|####|####|####|####|####|####|####|####|####|    |    |    |    |    |
 | Ai Pushdown Automaton      |     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |####|####|####|####|####|
 | Pheromone Engine           |     |   |   |   |   |   |    |    |    |####|####|####|####|####|####|####|####|####|####|####|####|####|
-| Movement Solver (*)        |     |   |   |   |   |   |    |    |    |    |####|####|####|####|####|####|####|####|####|####|####|####|
+| Movement Solver            |     |   |   |   |   |   |    |    |    |    |####|####|####|####|####|####|####|####|####|####|####|####|
 | Build Dropoffs             |     |   |   |   |   |   |    |####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|
 | Greedy Gathering           | ####|###|###|###|###|###|####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|####|
 | Use Inspiration            |     |   |   |   |   |   |    |    |    |    |    |####|####|####|####|####|####|####|####|####|####|####|
@@ -126,7 +126,5 @@ The table below shows the ranks (second row) achieved by each bot version (first
 | Collide high-cargo opponents|    |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |####|####|####|####|####|
 | High-cargo ships flee battles|   |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |####|####|####|####|
 | Opponents emit pheromones  |     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |####|####|
-| Leturn earlier in late game|     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |####|####|
+| Return earlier in late game|     |   |   |   |   |   |    |    |    |    |    |    |    |    |    |    |    |    |    |    |####|####|
 ```
-
-(*) [Kuhn Munkres Algorithm](https://en.wikipedia.org/wiki/Hungarian_algorithm)
