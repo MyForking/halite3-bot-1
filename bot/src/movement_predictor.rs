@@ -67,17 +67,18 @@ impl MovementPredictor {
                 },
             );*/
 
-            for p in pos.get_surrounding_cardinals().into_iter()
+            for p in pos
+                .get_surrounding_cardinals()
+                .into_iter()
                 .chain(std::iter::once(pos))
                 .map(|p| self.normalize(p))
                 .collect::<Vec<_>>()
-                {
-                match game.map.at_position(&pos).structure
-                {
+            {
+                match game.map.at_position(&pos).structure {
                     // simply ignore enemy ships at my own structures
                     Structure::Dropoff(did) if game.dropoffs[&did].owner == game.my_id => continue,
                     Structure::Shipyard(pid) if pid == game.my_id => continue,
-                    _ => {},
+                    _ => {}
                 };
 
                 if p == pos {

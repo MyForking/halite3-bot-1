@@ -29,7 +29,7 @@ impl ShipAi {
 
             let op = self.states.top().unwrap().step(self.id, world);
             if let StackOp::None = op {
-                break
+                break;
             } else {
                 self.states.transition(op);
             }
@@ -53,23 +53,26 @@ impl ShipAiState for Collect {
         let pos = world.get_ship(id).position;
         let cargo = world.get_ship(id).halite as i32;
         let phi0 = world.get_pheromone(pos);
-        Log::log(&format!("{:?} observes a pheromone level of {} at {:?}", id, phi0, pos));
+        Log::log(&format!(
+            "{:?} observes a pheromone level of {} at {:?}",
+            id, phi0, pos
+        ));
 
         if cargo >= 950 || phi0 < 10.0 && cargo >= 500 {
-            return StackOp::Done
+            return StackOp::Done;
         }
 
         if stuck_move(id, world) {
-            return StackOp::None
+            return StackOp::None;
         }
 
         let dist = world.get_return_distance(world.get_ship(id).position);
         if world.rounds_left()
             <= dist
-            + (world.me().ship_ids.len() * world.config.navigation.go_home_safety_factor)
-            / (1 * (1 + world.me().dropoff_ids.len()))
+                + (world.me().ship_ids.len() * world.config.navigation.go_home_safety_factor)
+                    / (1 * (1 + world.me().dropoff_ids.len()))
         {
-            return StackOp::Override(Box::new(GoHome))
+            return StackOp::Override(Box::new(GoHome));
         }
 
         let mc = world.movement_cost(&pos);
@@ -109,22 +112,37 @@ impl ShipAiState for Collect {
         let mut costs: Vec<_> = Direction::get_all_options()
             .into_iter()
             .map(|d| pos.directional_offset(d))
-            .map(|p| if cargo <= world.config.ships.carefulness_limit {world.mp.is_occupied(p)} else {world.mp.is_reachable(p)})
+            .map(|p| {
+                if cargo <= world.config.ships.carefulness_limit {
+                    world.mp.is_occupied(p)
+                } else {
+                    world.mp.is_reachable(p)
+                }
+            })
             .zip(weights)
-            .map(|(avoid, w)| if avoid {i32::max_value() - 10} else {-(w * 100.0) as i32})
+            .map(|(avoid, w)| {
+                if avoid {
+                    i32::max_value() - 10
+                } else {
+                    -(w * 100.0) as i32
+                }
+            })
             .collect();
 
         let mut prey = vec![];
-        for p in Direction::get_all_cardinals().into_iter().map(|d| pos.directional_offset(d)) {
+        for p in Direction::get_all_cardinals()
+            .into_iter()
+            .map(|d| pos.directional_offset(d))
+        {
             prey.push(None);
             if let Some(ship) = world.get_ship_at(p) {
                 if ship.owner == world.game.my_id {
-                    continue
+                    continue;
                 }
 
                 let other_cargo = ship.halite as i32;
                 if other_cargo <= cargo {
-                    continue
+                    continue;
                 }
 
                 let r = world
@@ -133,13 +151,19 @@ impl ShipAiState for Collect {
                     .map(|sp| world.game.map.calculate_distance(&p, &sp))
                     .unwrap_or(10);
 
-                Log::log(&format!("potential prey at {:?} with nearest opponent {} steps away...", p, r));
+                Log::log(&format!(
+                    "potential prey at {:?} with nearest opponent {} steps away...",
+                    p, r
+                ));
 
-                let free_cargo = world.my_ships()
+                let free_cargo = world
+                    .my_ships()
                     .map(|id| world.get_ship(id))
                     .filter(|ship| ship.position != pos)
                     .filter(|ship| world.game.map.calculate_distance(&p, &ship.position) <= r)
-                    .inspect(|ship| Log::log(&format!("   ... and friendly ship at {:?}", ship.position)))
+                    .inspect(|ship| {
+                        Log::log(&format!("   ... and friendly ship at {:?}", ship.position))
+                    })
                     .map(|ship| ship.capacity() as i32)
                     .sum::<i32>();
 
@@ -165,7 +189,9 @@ impl ShipAiState for Collect {
             world.add_pheromone(pos, 1000.0);
         }
 
-        world.gns.plan_move(id, pos, costs[4], costs[2], costs[3], costs[1], costs[0]);
+        world
+            .gns
+            .plan_move(id, pos, costs[4], costs[2], costs[3], costs[1], costs[0]);
 
         StackOp::None
     }
@@ -193,15 +219,13 @@ impl ShipAiState for Deliver {
         let cap = world.get_ship(id).capacity();
         let cargo = world.get_ship(id).halite;
 
-        let harvest = world.config.navigation.return_step_cost
-            - world.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
+        let harvest =
+            world.config.navigation.return_step_cost - world.halite_gain(&pos).min(cap) as i32; // we may actually gain something from waiting...
 
         if !stuck_move(id, world) {
             let [c0, cn, cs, ce, cw] = world.get_return_dir_costs(pos);
 
-            let ok_0 = !world
-                .mp
-                .is_reachable(pos);
+            let ok_0 = !world.mp.is_reachable(pos);
             let ok_n = !world
                 .mp
                 .is_reachable(pos.directional_offset(Direction::North));
@@ -240,7 +264,7 @@ impl ShipAiState for GoHome {
         let pos = world.get_ship(id).position;
 
         if stuck_move(id, world) {
-            return StackOp::None
+            return StackOp::None;
         }
 
         for d in Direction::get_all_cardinals() {
@@ -252,11 +276,11 @@ impl ShipAiState for GoHome {
             {
                 Structure::Dropoff(did) if world.game.dropoffs[&did].owner == world.game.my_id => {
                     world.gns.force_move(id, d);
-                    return StackOp::None
+                    return StackOp::None;
                 }
                 Structure::Shipyard(pid) if pid == world.game.my_id => {
                     world.gns.force_move(id, d);
-                    return StackOp::None
+                    return StackOp::None;
                 }
                 _ => {}
             }

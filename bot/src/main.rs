@@ -233,14 +233,20 @@ impl GameState {
     }
 
     fn find_nearest_oponent(&self, pos: Position, exclude_pos: bool) -> Option<ShipId> {
-        let mut ships: Vec<_> = self.game.ships.values().filter(|ship| ship.owner != self.game.my_id).collect();
+        let mut ships: Vec<_> = self
+            .game
+            .ships
+            .values()
+            .filter(|ship| ship.owner != self.game.my_id)
+            .collect();
         ships.sort_unstable_by_key(|ship| self.game.map.calculate_distance(&pos, &ship.position));
 
         if exclude_pos {
             ships.iter().find(|ship| ship.position != pos)
         } else {
             ships.first()
-        }.map(|ship| ship.id)
+        }
+        .map(|ship| ship.id)
     }
 
     fn distance_to_nearest_dropoff(&self, id: ShipId) -> usize {
@@ -441,8 +447,10 @@ impl GameState {
                         continue;
                     }
                 }
-                let c =
-                    node.cost.saturating_add(self.movement_cost(&p)).saturating_add(self.config.navigation.return_step_cost);
+                let c = node
+                    .cost
+                    .saturating_add(self.movement_cost(&p))
+                    .saturating_add(self.config.navigation.return_step_cost);
                 queue.push(DijkstraMinNode::new(c, (p, d)));
             }
         }
@@ -500,9 +508,8 @@ impl GameState {
             }
 
             for ship in self.game.ships.values() {
-                let (p, cargo, cap) = {
-                    (ship.position, ship.halite as f64, ship.capacity() as f64)
-                };
+                let (p, cargo, cap) =
+                    { (ship.position, ship.halite as f64, ship.capacity() as f64) };
 
                 let phi0 = self.pheromones[p.y as usize][p.x as usize];
 

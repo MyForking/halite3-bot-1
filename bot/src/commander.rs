@@ -60,8 +60,7 @@ impl CommanderState for MidGame {
             })
             .unwrap();
 
-        let want_dropoff = world.avg_return_length
-            >= world.config.expansion.return_distance as f64
+        let want_dropoff = world.avg_return_length >= world.config.expansion.return_distance as f64
             && max_density >= world.config.expansion.min_halite_density;
 
         if want_dropoff {
@@ -126,12 +125,12 @@ impl CommanderState for MidGame {
 
             (halite_left / n_ships > world.game.constants.ship_cost)
                 && world.rounds_left()
-                > world.game.map.width * world.config.strategy.spawn_min_rounds_left_factor
+                    > world.game.map.width * world.config.strategy.spawn_min_rounds_left_factor
         };
 
         want_ship &= !want_dropoff
             || world.me().halite
-            >= world.game.constants.dropoff_cost + world.game.constants.ship_cost;
+                >= world.game.constants.dropoff_cost + world.game.constants.ship_cost;
 
         if want_ship && world.me().halite >= world.game.constants.ship_cost {
             let pos = world.me().shipyard.position;
