@@ -1,0 +1,12 @@
+[package]
+name = "whatif"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+gfx = "0.17"
+gfx_window_glutin = "0.28"
+glutin = "0.19"
+imgui = { git = "https://github.com/Gekkio/imgui-rs.git" }
+imgui-gfx-renderer = { git = "https://github.com/Gekkio/imgui-rs.git" }
+imgui-winit-support = { git = "https://github.com/Gekkio/imgui-rs.git" }
