@@ -146,7 +146,7 @@ impl ShipAiState for Collect {
                 }
 
                 let r = world
-                    .find_nearest_oponent(p, true)
+                    .find_nearest_opponent(p, true)
                     .map(|id| world.get_ship(id).position)
                     .map(|sp| world.game.map.calculate_distance(&p, &sp))
                     .unwrap_or(10);

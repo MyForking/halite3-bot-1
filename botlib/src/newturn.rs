@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use hlt::input::Input;
 use hlt::ship::Ship;
 use hlt::dropoff::Dropoff;
