@@ -173,7 +173,7 @@ impl GameState {
         self.command_queue.clear();
     }
 
-    fn finalize_frame(&mut self, _runid: &str, dumpfile: Option<&str>) {
+    fn finalize_frame(&mut self, _runid: &str, dumpfile: Option<&str>) -> &[Command]{
         //Log::log(&format!("issuing commands: {:?}", command_queue));
 
         /*if self.game.turn_number == self.game.constants.max_turns - 5 {
@@ -192,11 +192,11 @@ impl GameState {
             file.write_all(b"\n===\n").unwrap();
         }
 
-        Game::end_turn(&self.command_queue);
-
         if self.game.turn_number >= self.game.constants.max_turns - 1 {
             Log::log(&format!("collection rate: {:?}", self.collect_statistic));
         }
+
+        &self.command_queue
     }
 
     fn notify_return(&mut self, turns_taken: usize) {
@@ -492,9 +492,9 @@ impl GameState {
             for i in 0..h {
                 for j in 0..w {
                     let phi0 = self.pheromones[i][j];
-                    let mut dphi = (self.pheromones[(i + h - 1) % h][j]
+                    let mut dphi = (self.pheromones[(i - 1) % h][j]
                         + self.pheromones[(i + 1) % h][j]
-                        + self.pheromones[i][(j + h - 1) % w]
+                        + self.pheromones[i][(j - 1) % w]
                         + self.pheromones[i][(j + 1) % w]
                         - phi0 * 4.0)
                         * self.config.pheromones.diffusion_coefficient;
@@ -752,6 +752,8 @@ fn main() {
 
         ai_mgr.think(&mut gamestate);
 
-        gamestate.finalize_frame(&runid, dump_file.as_ref().map(String::as_ref));
+        let commands = gamestate.finalize_frame(&runid, dump_file.as_ref().map(String::as_ref));
+
+        Game::end_turn(commands);
     }
 }
