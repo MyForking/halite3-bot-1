@@ -8,6 +8,8 @@ use hlt::PlayerId;
 use hlt::ShipId;
 use std::collections::HashMap;
 
+use crate::newturn;
+
 #[derive(Serialize)]
 pub struct Player {
     pub id: PlayerId,
@@ -18,7 +20,23 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn update(
+    pub fn update(&mut self, ships: &mut HashMap<ShipId, Ship>, dropoffs: &mut HashMap<DropoffId, Dropoff>, dp: newturn::Player) {
+        self.halite = dp.halite;
+
+        self.ship_ids.clear();
+        for ship in dp.ships {
+            self.ship_ids.push(ship.id);
+            ships.insert(ship.id, ship);
+        }
+
+        self.dropoff_ids.clear();
+        for dropoff in dp.dropoffs {
+            self.dropoff_ids.push(dropoff.id);
+            dropoffs.insert(dropoff.id, dropoff);
+        }
+    }
+
+    /*pub fn update(
         &mut self,
         input: &mut Input,
         max_halite: usize,
@@ -43,7 +61,7 @@ impl Player {
             self.dropoff_ids.push(dropoff.id);
             dropoffs.insert(dropoff.id, dropoff);
         }
-    }
+    }*/
 
     pub fn generate(input: &mut Input) -> Player {
         input.read_and_parse_line();

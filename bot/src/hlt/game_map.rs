@@ -5,6 +5,8 @@ use hlt::map_cell::Structure;
 use hlt::position::Position;
 use std::cmp::min;
 
+use crate::newturn::MapUpdate;
+
 #[derive(Serialize)]
 pub struct GameMap {
     pub width: usize,
@@ -52,7 +54,14 @@ impl GameMap {
         Position { x, y }
     }
 
-    pub fn update(&mut self, input: &mut Input) {
+    pub fn update(&mut self, cells: &[MapUpdate]) {
+
+        for mu in cells {
+            self.cells[mu.y][mu.x].halite = mu.halite;
+        }
+    }
+
+    /*pub fn update(&mut self, input: &mut Input) {
         input.read_and_parse_line();
         let update_count = input.next_usize();
 
@@ -64,7 +73,7 @@ impl GameMap {
 
             self.cells[y][x].halite = halite;
         }
-    }
+    }*/
 
     pub fn generate(input: &mut Input) -> GameMap {
         input.read_and_parse_line();

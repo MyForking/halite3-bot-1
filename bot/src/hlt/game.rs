@@ -12,6 +12,8 @@ use hlt::PlayerId;
 use hlt::ShipId;
 use std::collections::HashMap;
 
+use crate::newturn::NewTurn;
+
 #[derive(Serialize)]
 pub struct Game {
     #[serde(skip)]
@@ -22,14 +24,10 @@ pub struct Game {
     pub ships: HashMap<ShipId, Ship>,
     pub dropoffs: HashMap<DropoffId, Dropoff>,
     pub map: GameMap,
-
-    #[serde(skip)]
-    input: Input,
 }
 
 impl Game {
-    pub fn new() -> Game {
-        let mut input = Input::new();
+    pub fn from_input(input: &mut Input) -> Game {
         let constants = Constants::new(&input.read_and_return_line());
 
         input.read_and_parse_line();
@@ -40,10 +38,10 @@ impl Game {
 
         let mut players: Vec<Player> = Vec::new();
         for _ in 0..num_players {
-            players.push(Player::generate(&mut input));
+            players.push(Player::generate(input));
         }
 
-        let map = GameMap::generate(&mut input);
+        let map = GameMap::generate(input);
 
         Game {
             constants,
@@ -53,7 +51,6 @@ impl Game {
             ships: HashMap::new(),
             dropoffs: HashMap::new(),
             map,
-            input,
         }
     }
 
@@ -61,7 +58,34 @@ impl Game {
         println!("{}", name);
     }
 
-    pub fn update_frame(&mut self) {
+    pub fn update_frame(&mut self, delta: NewTurn) {
+        self.turn_number = delta.turn_number;
+
+        Log::log(&format!(
+            "=============== TURN {} ================",
+            self.turn_number
+        ));
+
+        self.ships.clear();
+        self.dropoffs.clear();
+
+        for player in delta.players {
+            self.players[player.player_id.0].update(&mut self.ships, &mut self.dropoffs, player);
+        }
+        self.map.update(&delta.map_updates);
+
+        for player in &self.players {
+            let shipyard = &player.shipyard;
+            self.map.at_entity_mut(shipyard).structure = Structure::Shipyard(player.id);
+
+            for dropoff_id in &player.dropoff_ids {
+                let dropoff = &self.dropoffs[dropoff_id];
+                self.map.at_entity_mut(dropoff).structure = Structure::Dropoff(*dropoff_id);
+            }
+        }
+    }
+
+    /*pub fn update_frame(&mut self) {
         let input = &mut self.input;
 
         input.read_and_parse_line();
@@ -104,7 +128,7 @@ impl Game {
                 self.map.at_entity_mut(dropoff).structure = Structure::Dropoff(*dropoff_id);
             }
         }
-    }
+    }*/
 
     pub fn end_turn(commands: &[Command]) {
         for command in commands {

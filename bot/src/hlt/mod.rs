@@ -28,7 +28,7 @@ pub mod ship;
 pub mod shipyard;
 
 #[allow(dead_code)]
-mod input;
+pub mod input;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize)]
 pub struct PlayerId(pub usize);

@@ -17,6 +17,7 @@ use hlt::player::Player;
 use hlt::position::Position;
 use hlt::ship::Ship;
 use hlt::ShipId;
+use newturn::NewTurn;
 //use rand::SeedableRng;
 //use rand::XorShiftRng;
 use std::collections::{BinaryHeap, HashMap};
@@ -32,6 +33,7 @@ mod config;
 mod hlt;
 mod movement_predictor;
 mod navigation_system;
+mod newturn;
 mod pda;
 mod ship_ai;
 mod utils;
@@ -98,8 +100,7 @@ pub struct GameState {
 }
 
 impl GameState {
-    fn new(cfg_file: &str) -> Self {
-        let game = Game::new();
+    fn new(cfg_file: &str, game: Game) -> Self {
         let state = GameState {
             config: config::Config::from_file(cfg_file),
             navi: Navi::new(game.map.width, game.map.height),
@@ -130,8 +131,8 @@ impl GameState {
         state
     }
 
-    fn update_frame(&mut self) {
-        self.game.update_frame();
+    fn update_frame(&mut self, delta: NewTurn) {
+        self.game.update_frame(delta);
 
         self.ship_map = vec![vec![None; self.game.map.width]; self.game.map.height];
         for (&id, pos) in self.game.ships.iter().map(|(id, s)| (id, s.position)) {
@@ -491,9 +492,9 @@ impl GameState {
             for i in 0..h {
                 for j in 0..w {
                     let phi0 = self.pheromones[i][j];
-                    let mut dphi = (self.pheromones[(i - 1) % h][j]
+                    let mut dphi = (self.pheromones[(i + h - 1) % h][j]
                         + self.pheromones[(i + 1) % h][j]
-                        + self.pheromones[i][(j - 1) % w]
+                        + self.pheromones[i][(j + h - 1) % w]
                         + self.pheromones[i][(j + 1) % w]
                         - phi0 * 4.0)
                         * self.config.pheromones.diffusion_coefficient;
@@ -737,14 +738,20 @@ fn main() {
 
     Log::log(&format!("using config file: {}", cfg_file));
 
+    let mut input = hlt::input::Input::new();
+
+    let game = Game::from_input(&mut input);
+
     let mut ai_mgr = ai_manager::AiManager::new();
-    let mut game = GameState::new(&cfg_file);
+
+    let mut gamestate = GameState::new(&cfg_file, game);
 
     loop {
-        game.update_frame();
+        let delta = newturn::NewTurn::from_input(&mut input, gamestate.game.players.len(), gamestate.game.constants.max_halite);
+        gamestate.update_frame(delta);
 
-        ai_mgr.think(&mut game);
+        ai_mgr.think(&mut gamestate);
 
-        game.finalize_frame(&runid, dump_file.as_ref().map(String::as_ref));
+        gamestate.finalize_frame(&runid, dump_file.as_ref().map(String::as_ref));
     }
 }
