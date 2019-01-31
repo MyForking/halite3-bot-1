@@ -93,6 +93,8 @@ It simply classifies all map positions as `Clear`, `Occupied` by an opponenent, 
 
 - Ships refuse to return to enter the dropoff/shipyard for unloading if an opponent ship is adjacent to the structure. ([`movement_predictor.rs:75`](https://github.com/mbillingr/halite3-bot/blob/master/src/movement_predictor.rs#L75) wrongly uses the ship position instead of the adjacent tile position.)
 
+- Integer underflow at pheromone updates on the top and left edges. This panics in debug builds but passes silently in release. May not be an issue on power-of-two sized maps, but it could partially explain the bad performance on other maps.
+
 
 ## Table of Features and Ranks
 
